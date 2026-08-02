@@ -1,0 +1,65 @@
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "d:\\Shuvo\\zynexbd\\live_tracking"
+      ]
+    },
+    "github": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-github"
+      ],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${env:GITHUB_PERSONAL_ACCESS_TOKEN}"
+      }
+    },
+    "fetch": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-fetch"
+      ]
+    },
+    "mssql": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@eamonboyle/mssql-mcp"
+      ],
+      "env": {
+        "MSSQL_SERVER": "NASA-PC\\MSSQLSERVER2019",
+        "MSSQL_DATABASE": "LiveTrackingDb",
+        "MSSQL_USER": "sa",
+        "MSSQL_PASSWORD": "sa1234#",
+        "MSSQL_ENCRYPT": "false",
+        "MSSQL_TRUST_SERVER_CERTIFICATE": "true"
+      }
+    },
+    "docker": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-docker"
+      ]
+    },
+    "memory": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-memory"
+      ]
+    },
+    "sequential-thinking": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ]
+    }
+  }
+}
