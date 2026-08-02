@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: live_tracking_db
+    environment:
+      - ACCEPT_EULA=Y
+      - MSSQL_SA_PASSWORD=sa1234#
+    ports:
+      - "1433:1433"
+    volumes:
+      - mssql-data:/var/opt/mssql/data
+
+  api:
+    build:
+      context: ./apis/LiveTracking.Api
+      dockerfile: Dockerfile
+    container_name: live_tracking_api
+    ports:
+      - "5000:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Server=mssql;Database=LiveTrackingDb;User Id=sa;Password=sa1234#;TrustServerCertificate=True;
+    depends_on:
+      - mssql
+
+volumes:
+  mssql-data:

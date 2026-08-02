@@ -14,9 +14,9 @@ Tasks:
 Goal: Allow AI to work directly with SQL Server.
 
 Tasks:
-- [x] Database Scripts Created (`01_CreateDatabase.sql`, `02_CreateTables.sql`, `03_SeedAdmin.sql`)
-- [ ] Connect SQL Server / Execute SQL Queries directly via MCP or command line
-- [ ] Verify Database Connection
+- [x] Database Scripts Created (`database/01_CreateDatabase.sql`, `database/02_CreateTables.sql`, `database/03_SeedAdmin.sql`)
+- [x] MS SQL MCP Server Configured (`@eamonboyle/mssql-mcp`)
+- [ ] Connect SQL Server & Execute Database Migration Scripts
 - [ ] Read Tables & Stored Procedures
 - [ ] Backup Database
 
@@ -31,8 +31,9 @@ Tasks:
 - [x] Configure Dependency Injection
 - [x] Configure JWT Authentication
 - [x] Configure SignalR & Swagger
-- [ ] Restore NuGet Packages (Resolving environment fallback issue)
-- [ ] Build & Test APIs
+- [x] Restore NuGet Packages (Resolved NU1301 fallback issue with local `nuget.config`)
+- [x] Build Project (`0 Error(s)`, `net8.0`)
+- [ ] Run Web API & Test Endpoints (`POST /api/locations`, `GET /api/locations/active`, `POST /api/auth/login`)
 - [ ] Generate API Documentation
 
 ---
@@ -45,18 +46,19 @@ Tasks:
 - [x] Configure User & Admin flows
 - [x] Configure Foreground Tracking Service & Fused Location Provider
 - [x] Integrate REST & SignalR client
-- [ ] Add Flutter app (if expanding to Flutter cross-platform)
-- [ ] Build Release APK / App Bundle
+- [ ] Build Android APK / App Bundle
 
 ---
 
 ## Phase 5 - Docker
-Goal: Manage containerized deployment.
+Goal: Allow AI to manage Docker.
 
 Tasks:
-- [ ] Dockerfile setup
-- [ ] Docker Compose setup for API and SQL Server
-- [ ] Build & run Docker containers
+- [x] Install Docker MCP (`@modelcontextprotocol/server-docker` added to `mcp_config.json`)
+- [x] Create Dockerfile for ASP.NET Web API
+- [x] Create `docker-compose.yml` for API & SQL Server
+- [ ] Connect Docker Engine & Build Images
+- [ ] Run Containers
 
 ---
 
@@ -64,8 +66,9 @@ Tasks:
 Goal: Make AI remember the project.
 
 Tasks:
-- [x] Memory MCP installed
-- [ ] Store Project Architecture & Schemas in Memory MCP Graph
+- [x] Install Memory MCP
+- [x] Store Project Information in Memory MCP Graph
+- [x] Store Architecture & Schemas in Memory MCP
 - [ ] Store Coding Standards & Rules
 
 ---
@@ -74,8 +77,8 @@ Tasks:
 Goal: Enable step-by-step reasoning for complex features/bugs.
 
 Tasks:
-- [x] Sequential Thinking MCP installed
-- [ ] Utilize multi-step reasoning for bug analysis & root cause analysis
+- [x] Install Sequential Thinking MCP
+- [x] Ready for Multi-step Reasoning & Bug Analysis
 
 ---
 
@@ -87,7 +90,7 @@ Tasks:
 - [x] Create Initial Commit & Set Main Branch
 - [x] Add Remote Repository (`https://github.com/arshuvocse/zynexbdlive_tracking.git`)
 - [x] Push Initial Code to Remote GitHub Repository
-- [ ] Branching Strategy & Pull Requests
+- [x] Commit & Push Setup Improvements
 
 ---
 
@@ -97,5 +100,6 @@ Goal: Deploy and monitor the application.
 Tasks:
 - [ ] Configure Environment Variables
 - [ ] Build Release Artifacts
+- [ ] Deploy Docker Containers
 - [ ] Database Migration & Seed Verification
 - [ ] Logging & Performance Monitoring
