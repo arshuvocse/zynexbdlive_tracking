@@ -60,3 +60,4 @@ Kotlin, single APK containing both User and Admin flows (routed by role after lo
 
 ### Permissions requested
 `ACCESS_FINE_LOCATION`, `ACCESS_BACKGROUND_LOCATION`, `FOREGROUND_SERVICE` (+ `FOREGROUND_SERVICE_LOCATION`), `POST_NOTIFICATIONS`, `WAKE_LOCK`, `INTERNET`, `RECEIVE_BOOT_COMPLETED`, `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`.
+# zynexbdlive_tracking
