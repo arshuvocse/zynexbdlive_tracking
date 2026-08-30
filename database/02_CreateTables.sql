@@ -1,6 +1,7 @@
 /* ============================================================
+   File: database/02_CreateTables.sql
    LiveTrackingDB - Table Creation Script
-   All tables use the myonline_tbl prefix as required.
+   All tables use the myonline_tbl_ prefix as required.
    ============================================================ */
 USE LiveTrackingDB;
 GO
@@ -42,11 +43,16 @@ CREATE TABLE dbo.myonline_tbl_DriverLocations
 (
     Id              BIGINT          IDENTITY(1,1)   NOT NULL,
     UserId          INT                             NOT NULL,
-    Location        GEOGRAPHY                       NULL,
     Latitude        FLOAT                           NOT NULL,
     Longitude       FLOAT                           NOT NULL,
+    Location        GEOGRAPHY                       NULL,
+    Accuracy        FLOAT                           NULL,
+    Speed           FLOAT                           NULL,
+    Bearing         FLOAT                           NULL,
     RecordedAt      DATETIME2                       NOT NULL
                         CONSTRAINT DF_myonline_tbl_DriverLocations_RecordedAt DEFAULT (SYSUTCDATETIME()),
+    DeviceBattery   INT                             NULL,
+    NetworkType     NVARCHAR(20)                    NULL,
 
     CONSTRAINT PK_myonline_tbl_DriverLocations PRIMARY KEY CLUSTERED (Id ASC),
     CONSTRAINT FK_myonline_tbl_DriverLocations_Users FOREIGN KEY (UserId)
@@ -58,13 +64,6 @@ GO
 /* Non-clustered index to speed up "latest location per user" queries */
 CREATE NONCLUSTERED INDEX IX_myonline_tbl_DriverLocations_UserId_RecordedAt
     ON dbo.myonline_tbl_DriverLocations (UserId, RecordedAt DESC);
-GO
-
-/* Spatial index on the Location column (required bounding-box params for GEOGRAPHY) */
-CREATE SPATIAL INDEX SIX_myonline_tbl_DriverLocations_Location
-    ON dbo.myonline_tbl_DriverLocations (Location)
-    USING GEOGRAPHY_AUTO_GRID
-    WITH (CELLS_PER_OBJECT = 16);
 GO
 
 /* ------------------------------------------------------------

@@ -1,4 +1,5 @@
 /* ============================================================
+   File: database/01_CreateDatabase.sql
    LiveTrackingDB - Database Creation Script
    Server: NASA-PC\MSSQLSERVER2019
    ============================================================ */
@@ -12,4 +13,7 @@ END
 GO
 
 ALTER DATABASE LiveTrackingDB SET RECOVERY SIMPLE;
+GO
+
+ALTER DATABASE LiveTrackingDB SET READ_COMMITTED_SNAPSHOT ON;
 GO

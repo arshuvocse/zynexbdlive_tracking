@@ -2,18 +2,32 @@
 bin/
 obj/
 *.user
+.vs/
 
 # Android / Gradle
 .gradle/
-apps/android/.gradle/
-apps/android/build/
-apps/android/app/build/
-apps/android/local.properties
+build/
+local.properties
 *.iml
 .idea/
 captures/
 .externalNativeBuild/
 .cxx/
+
+# Artifacts & Publish
+publish/
+publish_api/
+publish_output/
+*.zip
+*.rar
+*.apk
+*.log
+.claude/
+
+# Secrets - real connection strings / JWT keys live only on the deploy target
+LiveTrackingSystem/LiveTracking.Api/appsettings.json
+src/LiveTracking.API/appsettings.json
+.mcp.json
 
 # OS
 .DS_Store

@@ -1,6 +1,0 @@
-<resources>
-    <string name="app_name">Live Tracking</string>
-    <string name="tracking_channel_name">Location Tracking</string>
-    <string name="tracking_notification_title">Live Tracking Active</string>
-    <string name="tracking_notification_text">Sharing your location with dispatch</string>
-</resources>

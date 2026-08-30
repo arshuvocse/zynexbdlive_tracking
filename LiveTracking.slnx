@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/LiveTracking.API/LiveTracking.API.csproj" />
+    <Project Path="src/LiveTracking.Application/LiveTracking.Application.csproj" />
+    <Project Path="src/LiveTracking.Domain/LiveTracking.Domain.csproj" />
+    <Project Path="src/LiveTracking.Infrastructure/LiveTracking.Infrastructure.csproj" />
+    <Project Path="src/LiveTracking.Shared/LiveTracking.Shared.csproj" />
+  </Folder>
+</Solution>
