@@ -2,6 +2,7 @@ using System.Security.Claims;
 using LiveTracking.Api.Data;
 using LiveTracking.Api.DTOs;
 using LiveTracking.Api.Models;
+using LiveTracking.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -82,13 +83,13 @@ public class CustomerVisitsController : ControllerBase
             try
             {
                 byte[] bytes = Convert.FromBase64String(request.ShopPhotoBase64);
-                string uploadsFolder = Path.Combine(_env.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot"), "uploads");
-                if (!Directory.Exists(uploadsFolder)) Directory.CreateDirectory(uploadsFolder);
+                string uploadsFolder = StorageHelper.GetVisitsDirectory(_env);
+                StorageHelper.EnsureDirectoryWithFullPermissions(uploadsFolder);
 
                 string fileName = $"visit_{Guid.NewGuid()}_shop.jpg";
                 string fullPath = Path.Combine(uploadsFolder, fileName);
                 await System.IO.File.WriteAllBytesAsync(fullPath, bytes);
-                photoPath = $"/uploads/{fileName}";
+                photoPath = $"/uploads/visits/{fileName}";
             }
             catch
             {

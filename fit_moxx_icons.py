@@ -1,106 +1,107 @@
 import os
-from PIL import Image, ImageOps, ImageDraw
+from PIL import Image, ImageDraw
 import numpy as np
 
-src_path = r"E:\Downloads\New folder (5)\WhatsApp Image 2026-08-21 at 5.43.44 PM.jpeg"
+# Source and target paths
+src_path = r"E:\Downloads\moxx apps\moxappsicon.jpeg"
 res_dir = r"D:\Shuvo\zynexbd\live_tracking\LiveTrackingSystem\Moxx_App\app\src\main\res"
 
-img = Image.open(src_path).convert("RGBA")
-print(f"Original image size: {img.size}")
+if not os.path.exists(src_path):
+    raise FileNotFoundError(f"Source image not found at {src_path}")
 
-corners = [
-    img.getpixel((5, 5)),
-    img.getpixel((img.width - 6, 5)),
-    img.getpixel((5, img.height - 6)),
-    img.getpixel((img.width - 6, img.height - 6))
-]
+img = Image.open(src_path).convert("RGB")
+print(f"Loaded source image: {img.size} from {src_path}")
 
-bg_r = int(sum(c[0] for c in corners) / 4)
-bg_g = int(sum(c[1] for c in corners) / 4)
-bg_b = int(sum(c[2] for c in corners) / 4)
-bg_hex = f"#{bg_r:02X}{bg_g:02X}{bg_b:02X}"
+# Primary background color of the new image
+bg_rgb = (0, 173, 239)
+bg_hex = "#00ADEF"
 
-arr = np.array(img.convert("RGB"), dtype=np.int16)
-bg_arr = np.array([bg_r, bg_g, bg_b], dtype=np.int16)
-dist = np.sqrt(np.sum((arr - bg_arr) ** 2, axis=2))
-mask = dist > 20
+arr = np.array(img)
 
-if np.any(mask):
-    y_indices, x_indices = np.where(mask)
-    bbox = (x_indices.min(), y_indices.min(), x_indices.max() + 1, y_indices.max() + 1)
-    margin = 4
-    bbox = (
-        max(0, bbox[0] - margin),
-        max(0, bbox[1] - margin),
-        min(img.width, bbox[2] + margin),
-        min(img.height, bbox[3] + margin)
-    )
-    cropped_img = img.crop(bbox)
-else:
-    cropped_img = img
+# Detect white logo bounding box
+is_white = arr[:, :, 0] > 100
+ys, xs = np.where(is_white)
+min_x, max_x = xs.min(), xs.max()
+min_y, max_y = ys.min(), ys.max()
 
-print(f"Cropped content size: {cropped_img.size}")
+logo_crop = img.crop((min_x, min_y, max_x + 1, max_y + 1))
+w_orig, h_orig = logo_crop.size
+print(f"Detected White Logo bounds: {min_x},{min_y} -> {max_x},{max_y} (Size: {w_orig}x{h_orig})")
 
-def create_adaptive_foreground(size, safe_factor=0.78):
+# Extract transparent white logo with accurate anti-aliased alpha
+logo_arr = np.array(logo_crop, dtype=float)
+alpha = np.clip((logo_arr[:, :, 0] - 20.0) / (255.0 - 20.0) * 255.0, 0, 255).astype(np.uint8)
+white_logo = Image.new("RGBA", (w_orig, h_orig), (255, 255, 255, 0))
+white_arr = np.array(white_logo)
+white_arr[:, :, 3] = alpha
+white_logo = Image.fromarray(white_arr, "RGBA")
+
+# 1. Helper for Adaptive Icon Foreground (Transparent background, centered white logo)
+# Safe zone in Android adaptive icons: 66dp diameter out of 108dp.
+# Scale = 0.54 ensures the logo fits completely inside the circle without getting clipped on ANY launcher.
+def create_adaptive_foreground(size, scale=0.54):
     canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    target_dim = int(size * safe_factor)
-    
-    w, h = cropped_img.size
-    ratio = min(target_dim / w, target_dim / h)
-    new_w = max(1, int(w * ratio))
-    new_h = max(1, int(h * ratio))
-    
-    scaled = cropped_img.resize((new_w, new_h), Image.Resampling.LANCZOS)
-    offset_x = (size - new_w) // 2
-    offset_y = (size - new_h) // 2
-    canvas.paste(scaled, (offset_x, offset_y), scaled)
+    target_w = int(size * scale)
+    ratio = target_w / w_orig
+    target_h = int(h_orig * ratio)
+    resized_logo = white_logo.resize((target_w, target_h), Image.Resampling.LANCZOS)
+    pos_x = (size - target_w) // 2
+    pos_y = (size - target_h) // 2
+    canvas.paste(resized_logo, (pos_x, pos_y), resized_logo)
     return canvas
 
-def create_in_app_logo(width, height=None):
+# 2. Helper for Legacy Round Icon (Circular cyan background, centered white logo)
+def create_legacy_round(size, scale=0.56):
+    canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(canvas)
+    draw.ellipse((0, 0, size - 1, size - 1), fill=(*bg_rgb, 255))
+    target_w = int(size * scale)
+    ratio = target_w / w_orig
+    target_h = int(h_orig * ratio)
+    resized_logo = white_logo.resize((target_w, target_h), Image.Resampling.LANCZOS)
+    pos_x = (size - target_w) // 2
+    pos_y = (size - target_h) // 2
+    canvas.paste(resized_logo, (pos_x, pos_y), resized_logo)
+    return canvas
+
+# 3. Helper for Legacy Square Icon (Modern rounded square cyan background, centered white logo)
+def create_legacy_square(size, scale=0.68):
+    canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(canvas)
+    corner_radius = max(2, int(size * 0.18))
+    draw.rounded_rectangle((0, 0, size - 1, size - 1), radius=corner_radius, fill=(*bg_rgb, 255))
+    target_w = int(size * scale)
+    ratio = target_w / w_orig
+    target_h = int(h_orig * ratio)
+    resized_logo = white_logo.resize((target_w, target_h), Image.Resampling.LANCZOS)
+    pos_x = (size - target_w) // 2
+    pos_y = (size - target_h) // 2
+    canvas.paste(resized_logo, (pos_x, pos_y), resized_logo)
+    return canvas
+
+# 4. Helper for in-app logos (Branded rounded card with white logo)
+def create_in_app_card_logo(width, height=None, corner_ratio=0.15):
     if height is None:
         height = width
     canvas = Image.new("RGBA", (width, height), (0, 0, 0, 0))
-    w, h = cropped_img.size
-    target_w = int(width * 0.94)
-    target_h = int(height * 0.94)
-    ratio = min(target_w / w, target_h / h)
-    new_w = max(1, int(w * ratio))
-    new_h = max(1, int(h * ratio))
+    draw = ImageDraw.Draw(canvas)
+    corner_radius = max(2, int(min(width, height) * corner_ratio))
+    draw.rounded_rectangle((0, 0, width - 1, height - 1), radius=corner_radius, fill=(*bg_rgb, 255))
     
-    scaled = cropped_img.resize((new_w, new_h), Image.Resampling.LANCZOS)
-    offset_x = (width - new_w) // 2
-    offset_y = (height - new_h) // 2
-    canvas.paste(scaled, (offset_x, offset_y), scaled)
+    # Fit logo inside with margin
+    target_w = int(width * 0.80)
+    target_h = int(height * 0.80)
+    ratio = min(target_w / w_orig, target_h / h_orig)
+    final_w = int(w_orig * ratio)
+    final_h = int(h_orig * ratio)
+    
+    resized_logo = white_logo.resize((final_w, final_h), Image.Resampling.LANCZOS)
+    pos_x = (width - final_w) // 2
+    pos_y = (height - final_h) // 2
+    canvas.paste(resized_logo, (pos_x, pos_y), resized_logo)
     return canvas
 
-def create_legacy_icon(size, is_round=False):
-    canvas = Image.new("RGBA", (size, size), (bg_r, bg_g, bg_b, 255))
-    
-    if is_round:
-        mask = Image.new("L", (size, size), 0)
-        draw = ImageDraw.Draw(mask)
-        draw.ellipse((0, 0, size, size), fill=255)
-    
-    factor = 0.78 if is_round else 0.88
-    target_dim = int(size * factor)
-    
-    w, h = cropped_img.size
-    ratio = min(target_dim / w, target_dim / h)
-    new_w = max(1, int(w * ratio))
-    new_h = max(1, int(h * ratio))
-    
-    scaled = cropped_img.resize((new_w, new_h), Image.Resampling.LANCZOS)
-    offset_x = (size - new_w) // 2
-    offset_y = (size - new_h) // 2
-    canvas.paste(scaled, (offset_x, offset_y), scaled)
-    
-    if is_round:
-        output = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-        output.paste(canvas, (0, 0), mask)
-        return output
-    else:
-        return canvas
-
+# 5. Generate Adaptive Foreground for all densities
 fg_sizes = {
     "drawable-mdpi": 108,
     "drawable-hdpi": 162,
@@ -110,16 +111,18 @@ fg_sizes = {
 }
 
 for folder, size in fg_sizes.items():
-    fg = create_adaptive_foreground(size, safe_factor=0.76)
     out_dir = os.path.join(res_dir, folder)
     os.makedirs(out_dir, exist_ok=True)
+    
+    fg = create_adaptive_foreground(size)
     fg.save(os.path.join(out_dir, "ic_launcher_foreground.png"), "PNG")
     
-    app_logo = create_in_app_logo(size)
+    app_logo = create_in_app_card_logo(size)
     app_logo.save(os.path.join(out_dir, "app_logo.png"), "PNG")
     app_logo.save(os.path.join(out_dir, "ic_tracking_logo.png"), "PNG")
     print(f"Generated {folder} assets ({size}x{size})")
 
+# 6. Generate Legacy Mipmap Icons
 mipmap_sizes = {
     "mipmap-mdpi": 48,
     "mipmap-hdpi": 72,
@@ -132,16 +135,36 @@ for folder, size in mipmap_sizes.items():
     out_dir = os.path.join(res_dir, folder)
     os.makedirs(out_dir, exist_ok=True)
     
-    sq = create_legacy_icon(size, is_round=False)
+    sq = create_legacy_square(size)
     sq.save(os.path.join(out_dir, "ic_launcher.png"), "PNG")
     
-    rd = create_legacy_icon(size, is_round=True)
+    rd = create_legacy_round(size)
     rd.save(os.path.join(out_dir, "ic_launcher_round.png"), "PNG")
     print(f"Generated {folder} launcher icons ({size}x{size})")
 
-# Direct drawables
-create_in_app_logo(512).save(os.path.join(res_dir, "drawable", "app_logo.png"), "PNG")
-create_in_app_logo(512).save(os.path.join(res_dir, "drawable", "ic_tracking_logo.png"), "PNG")
-create_in_app_logo(128).save(os.path.join(res_dir, "drawable", "ic_notification_logo.png"), "PNG")
+# 7. Generate direct drawables
+create_in_app_card_logo(512, 512).save(os.path.join(res_dir, "drawable", "app_logo.png"), "PNG")
+create_in_app_card_logo(512, 512).save(os.path.join(res_dir, "drawable", "ic_tracking_logo.png"), "PNG")
 
-print("All icons successfully resized and made prominent!")
+# Status bar notification icon (pure white transparent monochrome logo)
+notif_size = 96
+notif_logo_w = int(notif_size * 0.85)
+notif_logo_h = int(h_orig * (notif_logo_w / w_orig))
+notif_canvas = Image.new("RGBA", (notif_size, notif_size), (0, 0, 0, 0))
+resized_notif = white_logo.resize((notif_logo_w, notif_logo_h), Image.Resampling.LANCZOS)
+notif_canvas.paste(resized_notif, ((notif_size - notif_logo_w) // 2, (notif_size - notif_logo_h) // 2), resized_notif)
+notif_canvas.save(os.path.join(res_dir, "drawable", "ic_notification_logo.png"), "PNG")
+
+# 8. Update ic_launcher_background.xml
+bg_xml_path = os.path.join(res_dir, "drawable", "ic_launcher_background.xml")
+bg_xml_content = f"""<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="{bg_hex}" />
+</shape>
+"""
+with open(bg_xml_path, "w", encoding="utf-8") as f:
+    f.write(bg_xml_content)
+
+print(f"Updated {bg_xml_path} with {bg_hex}")
+print("\n=== SUCCESS: All Moxx App icons fitted and generated flawlessly! ===")

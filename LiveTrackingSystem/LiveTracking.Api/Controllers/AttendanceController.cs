@@ -3,6 +3,7 @@ using LiveTracking.Api.Data;
 using LiveTracking.Api.DTOs;
 using LiveTracking.Api.Hubs;
 using LiveTracking.Api.Models;
+using LiveTracking.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
@@ -189,198 +190,220 @@ public class AttendanceController : ControllerBase
     [Consumes("multipart/form-data")]
     public async Task<ActionResult<AttendanceResponseDto>> PunchIn([FromForm] AttendancePunchRequest request)
     {
-        int userId = GetCurrentUserId();
-        if (userId <= 0) return Unauthorized();
-
-        var todayLocalDate = DateTime.UtcNow.AddHours(6).Date;
-        var todayStartUtc = todayLocalDate.AddHours(-6);
-        var todayEndUtc = todayStartUtc.AddDays(1);
-
-        var alreadyIn = await _db.AttendanceRecords
-            .AnyAsync(a => a.UserId == userId && a.Type == "In" && a.RecordedAtUtc >= todayStartUtc && a.RecordedAtUtc < todayEndUtc);
-        if (alreadyIn)
-        {
-            return BadRequest("You have already recorded Duty In for today.");
-        }
-
-        var selfieUrl = await SaveSelfieAsync(request.Selfie, userId);
-        var (status, shiftName) = await CalculatePunchStatusAsync(userId, "In", DateTime.UtcNow);
-
-        var record = new AttendanceRecord
-        {
-            UserId = userId,
-            Type = "In",
-            Latitude = request.Latitude,
-            Longitude = request.Longitude,
-            IsWithinGeofence = true,
-            SelfieUrl = selfieUrl,
-            Status = status,
-            ShiftName = shiftName,
-            RecordedAtUtc = DateTime.UtcNow
-        };
-
-        _db.AttendanceRecords.Add(record);
-        await _db.SaveChangesAsync();
-
-        var user = await _db.Users.FindAsync(userId);
-        var userName = user?.FullName ?? user?.Username ?? "Officer";
-        var localTime = record.RecordedAtUtc.AddHours(6).ToString("hh:mm tt");
-
-        // Send Push Notification to Admins
         try
         {
-            var notification = new NotificationItem
+            int userId = GetCurrentUserId();
+            if (userId <= 0) return Unauthorized(new { message = "User is not authenticated." });
+
+            var todayLocalDate = DateTime.UtcNow.AddHours(6).Date;
+            var todayStartUtc = todayLocalDate.AddHours(-6);
+            var todayEndUtc = todayStartUtc.AddDays(1);
+
+            var alreadyIn = await _db.AttendanceRecords
+                .AnyAsync(a => a.UserId == userId && a.Type == "In" && a.RecordedAtUtc >= todayStartUtc && a.RecordedAtUtc < todayEndUtc);
+            if (alreadyIn)
             {
-                UserId = null,
-                CompanyId = user?.CompanyId,
-                TargetRole = "Admin",
-                Title = "🟢 Duty In Alert",
-                Message = $"{userName} has recorded Duty In at {localTime} ({status} - {shiftName}).",
-                Type = "Attendance",
-                ReferenceId = record.AttendanceId.ToString(),
-                IsRead = false,
-                CreatedAtUtc = DateTime.UtcNow
+                return BadRequest("You have already recorded Duty In for today.");
+            }
+
+            var selfieUrl = await SaveSelfieAsync(request.Selfie, userId);
+            var (status, shiftName) = await CalculatePunchStatusAsync(userId, "In", DateTime.UtcNow);
+
+            var record = new AttendanceRecord
+            {
+                UserId = userId,
+                Type = "In",
+                Latitude = request.Latitude,
+                Longitude = request.Longitude,
+                IsWithinGeofence = true,
+                SelfieUrl = selfieUrl ?? "",
+                Status = status,
+                ShiftName = shiftName,
+                RecordedAtUtc = DateTime.UtcNow
             };
-            _db.Notifications.Add(notification);
+
+            _db.AttendanceRecords.Add(record);
             await _db.SaveChangesAsync();
 
-            var notifDto = new NotificationDto
-            {
-                NotificationId = notification.NotificationId,
-                UserId = null,
-                CompanyId = notification.CompanyId,
-                TargetRole = "Admin",
-                Title = notification.Title,
-                Message = notification.Message,
-                Type = notification.Type,
-                ReferenceId = notification.ReferenceId,
-                IsRead = false,
-                CreatedAtUtc = notification.CreatedAtUtc
-            };
+            var user = await _db.Users.FindAsync(userId);
+            var userName = user?.FullName ?? user?.Username ?? "Officer";
+            var localTime = record.RecordedAtUtc.AddHours(6).ToString("hh:mm tt");
 
-            if (user?.CompanyId.HasValue == true && user.CompanyId.Value > 0)
+            // Send Push Notification to Admins
+            try
             {
-                await _hub.Clients.Group(LocationHub.CompanyAdminsGroup(user.CompanyId.Value)).SendAsync("ReceiveNotification", notifDto);
+                var notification = new NotificationItem
+                {
+                    UserId = null,
+                    CompanyId = user?.CompanyId,
+                    TargetRole = "Admin",
+                    Title = "🟢 Duty In Alert",
+                    Message = $"{userName} has recorded Duty In at {localTime} ({status} - {shiftName}).",
+                    Type = "Attendance",
+                    ReferenceId = record.AttendanceId.ToString(),
+                    IsRead = false,
+                    CreatedAtUtc = DateTime.UtcNow
+                };
+                _db.Notifications.Add(notification);
+                await _db.SaveChangesAsync();
+
+                var notifDto = new NotificationDto
+                {
+                    NotificationId = notification.NotificationId,
+                    UserId = null,
+                    CompanyId = notification.CompanyId,
+                    TargetRole = "Admin",
+                    Title = notification.Title,
+                    Message = notification.Message,
+                    Type = notification.Type,
+                    ReferenceId = notification.ReferenceId,
+                    IsRead = false,
+                    CreatedAtUtc = notification.CreatedAtUtc
+                };
+
+                if (user?.CompanyId.HasValue == true && user.CompanyId.Value > 0)
+                {
+                    await _hub.Clients.Group(LocationHub.CompanyAdminsGroup(user.CompanyId.Value)).SendAsync("ReceiveNotification", notifDto);
+                }
+                else
+                {
+                    await _hub.Clients.Group(LocationHub.AdminsGroup).SendAsync("ReceiveNotification", notifDto);
+                }
             }
-            else
-            {
-                await _hub.Clients.Group(LocationHub.AdminsGroup).SendAsync("ReceiveNotification", notifDto);
-            }
+            catch { }
+
+            return Ok(new AttendanceResponseDto(
+                record.AttendanceId,
+                record.UserId,
+                userName,
+                record.Type,
+                record.RecordedAtUtc.ToString("o"),
+                record.Latitude,
+                record.Longitude,
+                record.IsWithinGeofence,
+                record.SelfieUrl,
+                record.Status,
+                record.ShiftName
+            ));
         }
-        catch { }
-
-        return Ok(new AttendanceResponseDto(
-            record.AttendanceId,
-            record.UserId,
-            userName,
-            record.Type,
-            record.RecordedAtUtc.ToString("o"),
-            record.Latitude,
-            record.Longitude,
-            record.IsWithinGeofence,
-            record.SelfieUrl,
-            record.Status,
-            record.ShiftName
-        ));
+        catch (Exception ex)
+        {
+            return StatusCode(500, new
+            {
+                message = "Duty In processing failed: " + ex.Message,
+                detail = ex.InnerException?.Message
+            });
+        }
     }
 
     [HttpPost("punch-out")]
     [Consumes("multipart/form-data")]
     public async Task<ActionResult<AttendanceResponseDto>> PunchOut([FromForm] AttendancePunchRequest request)
     {
-        int userId = GetCurrentUserId();
-        if (userId <= 0) return Unauthorized();
-
-        var todayLocalDate = DateTime.UtcNow.AddHours(6).Date;
-        var todayStartUtc = todayLocalDate.AddHours(-6);
-        var todayEndUtc = todayStartUtc.AddDays(1);
-
-        var alreadyOut = await _db.AttendanceRecords
-            .AnyAsync(a => a.UserId == userId && a.Type == "Out" && a.RecordedAtUtc >= todayStartUtc && a.RecordedAtUtc < todayEndUtc);
-        if (alreadyOut)
-        {
-            return BadRequest("You have already recorded Duty Out for today.");
-        }
-
-        var selfieUrl = await SaveSelfieAsync(request.Selfie, userId);
-        var (status, shiftName) = await CalculatePunchStatusAsync(userId, "Out", DateTime.UtcNow);
-
-        var record = new AttendanceRecord
-        {
-            UserId = userId,
-            Type = "Out",
-            Latitude = request.Latitude,
-            Longitude = request.Longitude,
-            IsWithinGeofence = true,
-            SelfieUrl = selfieUrl,
-            Status = status,
-            ShiftName = shiftName,
-            RecordedAtUtc = DateTime.UtcNow
-        };
-
-        _db.AttendanceRecords.Add(record);
-        await _db.SaveChangesAsync();
-
-        var user = await _db.Users.FindAsync(userId);
-        var userName = user?.FullName ?? user?.Username ?? "Officer";
-        var localTime = record.RecordedAtUtc.AddHours(6).ToString("hh:mm tt");
-
-        // Send Push Notification to Admins
         try
         {
-            var notification = new NotificationItem
+            int userId = GetCurrentUserId();
+            if (userId <= 0) return Unauthorized(new { message = "User is not authenticated." });
+
+            var todayLocalDate = DateTime.UtcNow.AddHours(6).Date;
+            var todayStartUtc = todayLocalDate.AddHours(-6);
+            var todayEndUtc = todayStartUtc.AddDays(1);
+
+            var alreadyOut = await _db.AttendanceRecords
+                .AnyAsync(a => a.UserId == userId && a.Type == "Out" && a.RecordedAtUtc >= todayStartUtc && a.RecordedAtUtc < todayEndUtc);
+            if (alreadyOut)
             {
-                UserId = null,
-                CompanyId = user?.CompanyId,
-                TargetRole = "Admin",
-                Title = "🔴 Duty Out Alert",
-                Message = $"{userName} has recorded Duty Out at {localTime} ({status} - {shiftName}).",
-                Type = "Attendance",
-                ReferenceId = record.AttendanceId.ToString(),
-                IsRead = false,
-                CreatedAtUtc = DateTime.UtcNow
+                return BadRequest("You have already recorded Duty Out for today.");
+            }
+
+            var selfieUrl = await SaveSelfieAsync(request.Selfie, userId);
+            var (status, shiftName) = await CalculatePunchStatusAsync(userId, "Out", DateTime.UtcNow);
+
+            var record = new AttendanceRecord
+            {
+                UserId = userId,
+                Type = "Out",
+                Latitude = request.Latitude,
+                Longitude = request.Longitude,
+                IsWithinGeofence = true,
+                SelfieUrl = selfieUrl ?? "",
+                Status = status,
+                ShiftName = shiftName,
+                RecordedAtUtc = DateTime.UtcNow
             };
-            _db.Notifications.Add(notification);
+
+            _db.AttendanceRecords.Add(record);
             await _db.SaveChangesAsync();
 
-            var notifDto = new NotificationDto
-            {
-                NotificationId = notification.NotificationId,
-                UserId = null,
-                CompanyId = notification.CompanyId,
-                TargetRole = "Admin",
-                Title = notification.Title,
-                Message = notification.Message,
-                Type = notification.Type,
-                ReferenceId = notification.ReferenceId,
-                IsRead = false,
-                CreatedAtUtc = notification.CreatedAtUtc
-            };
+            var user = await _db.Users.FindAsync(userId);
+            var userName = user?.FullName ?? user?.Username ?? "Officer";
+            var localTime = record.RecordedAtUtc.AddHours(6).ToString("hh:mm tt");
 
-            if (user?.CompanyId.HasValue == true && user.CompanyId.Value > 0)
+            // Send Push Notification to Admins
+            try
             {
-                await _hub.Clients.Group(LocationHub.CompanyAdminsGroup(user.CompanyId.Value)).SendAsync("ReceiveNotification", notifDto);
+                var notification = new NotificationItem
+                {
+                    UserId = null,
+                    CompanyId = user?.CompanyId,
+                    TargetRole = "Admin",
+                    Title = "🔴 Duty Out Alert",
+                    Message = $"{userName} has recorded Duty Out at {localTime} ({status} - {shiftName}).",
+                    Type = "Attendance",
+                    ReferenceId = record.AttendanceId.ToString(),
+                    IsRead = false,
+                    CreatedAtUtc = DateTime.UtcNow
+                };
+                _db.Notifications.Add(notification);
+                await _db.SaveChangesAsync();
+
+                var notifDto = new NotificationDto
+                {
+                    NotificationId = notification.NotificationId,
+                    UserId = null,
+                    CompanyId = notification.CompanyId,
+                    TargetRole = "Admin",
+                    Title = notification.Title,
+                    Message = notification.Message,
+                    Type = notification.Type,
+                    ReferenceId = notification.ReferenceId,
+                    IsRead = false,
+                    CreatedAtUtc = notification.CreatedAtUtc
+                };
+
+                if (user?.CompanyId.HasValue == true && user.CompanyId.Value > 0)
+                {
+                    await _hub.Clients.Group(LocationHub.CompanyAdminsGroup(user.CompanyId.Value)).SendAsync("ReceiveNotification", notifDto);
+                }
+                else
+                {
+                    await _hub.Clients.Group(LocationHub.AdminsGroup).SendAsync("ReceiveNotification", notifDto);
+                }
             }
-            else
-            {
-                await _hub.Clients.Group(LocationHub.AdminsGroup).SendAsync("ReceiveNotification", notifDto);
-            }
+            catch { }
+
+            return Ok(new AttendanceResponseDto(
+                record.AttendanceId,
+                record.UserId,
+                userName,
+                record.Type,
+                record.RecordedAtUtc.ToString("o"),
+                record.Latitude,
+                record.Longitude,
+                record.IsWithinGeofence,
+                record.SelfieUrl,
+                record.Status,
+                record.ShiftName
+            ));
         }
-        catch { }
-
-        return Ok(new AttendanceResponseDto(
-            record.AttendanceId,
-            record.UserId,
-            userName,
-            record.Type,
-            record.RecordedAtUtc.ToString("o"),
-            record.Latitude,
-            record.Longitude,
-            record.IsWithinGeofence,
-            record.SelfieUrl,
-            record.Status,
-            record.ShiftName
-        ));
+        catch (Exception ex)
+        {
+            return StatusCode(500, new
+            {
+                message = "Duty Out processing failed: " + ex.Message,
+                detail = ex.InnerException?.Message
+            });
+        }
     }
 
     [HttpGet("history")]
@@ -705,12 +728,11 @@ public class AttendanceController : ControllerBase
         var safeFileName = Path.GetFileName(fileName);
         var candidates = new[]
         {
-            Path.Combine(_env.ContentRootPath, "wwwroot", "uploads", "selfies", safeFileName),
-            Path.Combine(_env.ContentRootPath, "uploads", "selfies", safeFileName),
-            Path.Combine(AppContext.BaseDirectory, "wwwroot", "uploads", "selfies", safeFileName),
+            Path.Combine(StorageHelper.GetSelfiesDirectory(_env), safeFileName),
             Path.Combine(AppContext.BaseDirectory, "uploads", "selfies", safeFileName),
-            Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "selfies", safeFileName),
-            Path.Combine(Directory.GetCurrentDirectory(), "uploads", "selfies", safeFileName)
+            Path.Combine(Directory.GetCurrentDirectory(), "uploads", "selfies", safeFileName),
+            Path.Combine(_env.ContentRootPath, "wwwroot", "uploads", "selfies", safeFileName),
+            Path.Combine(AppContext.BaseDirectory, "wwwroot", "uploads", "selfies", safeFileName)
         };
 
         foreach (var path in candidates)
@@ -736,36 +758,61 @@ public class AttendanceController : ControllerBase
     {
         if (file == null || file.Length == 0) return null;
 
-        var webRoot = Path.Combine(_env.ContentRootPath, "wwwroot");
-        var uploadsDir = Path.Combine(webRoot, "uploads", "selfies");
-        if (!Directory.Exists(uploadsDir))
-        {
-            Directory.CreateDirectory(uploadsDir);
-        }
-
         var ext = Path.GetExtension(file.FileName);
         if (string.IsNullOrEmpty(ext)) ext = ".jpg";
 
         var fileName = $"{userId}_{DateTime.UtcNow:yyyyMMdd_HHmmss}_{Guid.NewGuid():N}{ext}";
-        var filePath = Path.Combine(uploadsDir, fileName);
 
-        using (var stream = new FileStream(filePath, FileMode.Create))
+        // Primary location is strictly OUTSIDE wwwroot (uploads/selfies)
+        var primaryDir = StorageHelper.GetSelfiesDirectory(_env);
+        StorageHelper.EnsureDirectoryWithFullPermissions(primaryDir);
+
+        var candidateDirs = new[]
         {
-            await file.CopyToAsync(stream);
+            primaryDir,
+            Path.Combine(AppContext.BaseDirectory, "uploads", "selfies"),
+            Path.Combine(Directory.GetCurrentDirectory(), "uploads", "selfies"),
+            Path.Combine(Path.GetTempPath(), "livetracking_uploads", "selfies")
+        };
+
+        string? savedPath = null;
+
+        foreach (var dir in candidateDirs)
+        {
+            try
+            {
+                StorageHelper.EnsureDirectoryWithFullPermissions(dir);
+                var targetPath = Path.Combine(dir, fileName);
+                using (var stream = new FileStream(targetPath, FileMode.Create))
+                {
+                    await file.CopyToAsync(stream);
+                }
+                savedPath = targetPath;
+                break;
+            }
+            catch
+            {
+                // Try next directory candidate
+            }
         }
 
-        // Duplicate to secondary fallback locations to ensure accessibility across hosting models
-        try
+        // Mirror to secondary candidate locations if saved
+        if (savedPath != null)
         {
-            var altDir1 = Path.Combine(_env.ContentRootPath, "uploads", "selfies");
-            if (!Directory.Exists(altDir1)) Directory.CreateDirectory(altDir1);
-            System.IO.File.Copy(filePath, Path.Combine(altDir1, fileName), true);
-
-            var altDir2 = Path.Combine(AppContext.BaseDirectory, "wwwroot", "uploads", "selfies");
-            if (!Directory.Exists(altDir2)) Directory.CreateDirectory(altDir2);
-            System.IO.File.Copy(filePath, Path.Combine(altDir2, fileName), true);
+            foreach (var dir in candidateDirs)
+            {
+                try
+                {
+                    StorageHelper.EnsureDirectoryWithFullPermissions(dir);
+                    var mirrorTarget = Path.Combine(dir, fileName);
+                    if (!string.Equals(savedPath, mirrorTarget, StringComparison.OrdinalIgnoreCase))
+                    {
+                        System.IO.File.Copy(savedPath, mirrorTarget, true);
+                    }
+                }
+                catch { }
+            }
         }
-        catch { }
 
         return $"/uploads/selfies/{fileName}";
     }

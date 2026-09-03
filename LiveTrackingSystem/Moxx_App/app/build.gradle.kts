@@ -23,13 +23,13 @@ android {
         applicationId = "com.zynexbd.livetracking"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1"
 
         manifestPlaceholders["MAPS_API_KEY"] = mapsApiKey
 
-        buildConfigField("String", "API_BASE_URL", "\"http://104.215.157.203:120/\"")
-        buildConfigField("String", "SIGNALR_HUB_URL", "\"http://104.215.157.203:120/hubs/location\"")
+        buildConfigField("String", "API_BASE_URL", "\"http://217.216.39.94:82/\"")
+        buildConfigField("String", "SIGNALR_HUB_URL", "\"http://217.216.39.94:82/hubs/location\"")
         buildConfigField("String", "MAPS_API_KEY", "\"$mapsApiKey\"")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

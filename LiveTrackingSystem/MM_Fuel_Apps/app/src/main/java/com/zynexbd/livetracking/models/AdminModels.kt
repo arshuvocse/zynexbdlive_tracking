@@ -9,11 +9,35 @@ data class ExecutiveSummaryResponse(
     @SerializedName("todayPunchInCount") val todayPunchInCount: Int = 0,
     @SerializedName("todayAbsentCount") val todayAbsentCount: Int = 0,
     @SerializedName("todayLateCount") val todayLateCount: Int = 0,
+    @SerializedName("todayOnTimeCount") val todayOnTimeCount: Int = 0,
+    @SerializedName("todayOnLeaveCount") val todayOnLeaveCount: Int = 0,
+    @SerializedName("todayAttendanceRate") val todayAttendanceRate: Int = 0,
     @SerializedName("pendingLeaveRequestsCount") val pendingLeaveRequestsCount: Int = 0,
     @SerializedName("pendingCustomerFollowUpsCount") val pendingCustomerFollowUpsCount: Int = 0,
     @SerializedName("gpsDisabledUsersCount") val gpsDisabledUsersCount: Int = 0,
     @SerializedName("attentionItems") val attentionItems: List<AttentionItem> = emptyList(),
+    @SerializedName("dailyActivities") val dailyActivities: List<DashboardDailyActivityItem> = emptyList(),
+    @SerializedName("weeklyFieldVelocity") val weeklyFieldVelocity: List<WeeklyVelocityDay> = emptyList(),
     @SerializedName("systemHealth") val systemHealth: SystemHealthInfo? = null
+)
+
+data class DashboardDailyActivityItem(
+    @SerializedName("activityType") val activityType: String = "",
+    @SerializedName("title") val title: String = "",
+    @SerializedName("subtitle") val subtitle: String = "",
+    @SerializedName("time") val time: String = "",
+    @SerializedName("tag") val tag: String = "",
+    @SerializedName("tagColor") val tagColor: String = "#059669",
+    @SerializedName("userId") val userId: Int? = null,
+    @SerializedName("userName") val userName: String? = null,
+    @SerializedName("timestampUtc") val timestampUtc: String = ""
+)
+
+data class WeeklyVelocityDay(
+    @SerializedName("dayLabel") val dayLabel: String = "",
+    @SerializedName("datePrefix") val datePrefix: String = "",
+    @SerializedName("visitCount") val visitCount: Int = 0,
+    @SerializedName("followUpCount") val followUpCount: Int = 0
 )
 
 data class AttentionItem(
@@ -45,3 +69,4 @@ data class BulkLeaveResponse(
     @SerializedName("failedCount") val failedCount: Int = 0,
     @SerializedName("approvedIds") val approvedIds: List<Int> = emptyList()
 )
+

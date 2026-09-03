@@ -28,7 +28,7 @@ class LiveAppEndToEndTest {
     private lateinit var sessionManager: SessionManager
 
     companion object {
-        private const val LIVE_BASE_URL = "http://104.215.157.203:120/"
+        private const val LIVE_BASE_URL = "http://217.216.39.94:82/"
         private const val ADMIN_USER = "moxx_admin1"
         private const val ADMIN_PASS = "password123"
         private const val EMPLOYEE_USER = "moxx_field_319"

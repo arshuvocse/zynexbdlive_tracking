@@ -29,6 +29,8 @@ LiveTrackingSystem/LiveTracking.Api/appsettings.json
 src/LiveTracking.API/appsettings.json
 .mcp.json
 
-# OS
-.DS_Store
-Thumbs.db
+# Uploads
+**/uploads/
+**/wwwroot/uploads/
+test_selfie_valid.jpg
+

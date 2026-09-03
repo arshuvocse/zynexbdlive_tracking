@@ -110,14 +110,15 @@ builder.Services.AddCors(options =>
         policy.AllowAnyHeader().AllowAnyMethod().SetIsOriginAllowed(_ => true).AllowCredentials());
 });
 
-// Ensure static files directory exists
+// Ensure uploads directory exists outside wwwroot with automatic full permissions
 var contentRoot = builder.Environment.ContentRootPath;
-var webRoot = Path.Combine(contentRoot, "wwwroot");
-if (!Directory.Exists(webRoot)) Directory.CreateDirectory(webRoot);
-builder.Environment.WebRootPath = webRoot;
+var uploadsRoot = StorageHelper.GetUploadsRoot(builder.Environment);
+var selfiesDir = StorageHelper.GetSelfiesDirectory(builder.Environment);
+var visitsDir = StorageHelper.GetVisitsDirectory(builder.Environment);
 
-var uploadsDir = Path.Combine(webRoot, "uploads", "selfies");
-if (!Directory.Exists(uploadsDir)) Directory.CreateDirectory(uploadsDir);
+StorageHelper.EnsureDirectoryWithFullPermissions(uploadsRoot);
+StorageHelper.EnsureDirectoryWithFullPermissions(selfiesDir);
+StorageHelper.EnsureDirectoryWithFullPermissions(visitsDir);
 
 var app = builder.Build();
 
@@ -131,14 +132,32 @@ app.UseSwaggerUI(options =>
 
 app.UseCors("AllowAll");
 
-// Serve static files from wwwroot
-app.UseStaticFiles(new StaticFileOptions
+// Serve static files from uploads folder outside wwwroot
+if (Directory.Exists(uploadsRoot))
 {
-    FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(webRoot),
-    RequestPath = ""
-});
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(uploadsRoot),
+        RequestPath = "/uploads"
+    });
+}
 
-// Direct streaming endpoint for uploads (Selfie images, proof attachments, etc.)
+// Serve any wwwroot static files if present
+var webRoot = Path.Combine(contentRoot, "wwwroot");
+if (Directory.Exists(webRoot))
+{
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(webRoot),
+        RequestPath = ""
+    });
+}
+else
+{
+    app.UseStaticFiles();
+}
+
+// Direct streaming endpoint for uploads (Selfie images, proof attachments, etc.) outside wwwroot
 app.MapGet("/uploads/{**filePath}", (string filePath, IWebHostEnvironment env) =>
 {
     if (string.IsNullOrWhiteSpace(filePath)) return Results.NotFound();
@@ -148,18 +167,18 @@ app.MapGet("/uploads/{**filePath}", (string filePath, IWebHostEnvironment env) =
 
     var candidates = new[]
     {
-        Path.Combine(env.ContentRootPath, "wwwroot", "uploads", cleanPath),
-        Path.Combine(env.ContentRootPath, "wwwroot", "uploads", "selfies", fileName),
         Path.Combine(env.ContentRootPath, "uploads", cleanPath),
         Path.Combine(env.ContentRootPath, "uploads", "selfies", fileName),
-        Path.Combine(AppContext.BaseDirectory, "wwwroot", "uploads", cleanPath),
-        Path.Combine(AppContext.BaseDirectory, "wwwroot", "uploads", "selfies", fileName),
+        Path.Combine(env.ContentRootPath, "uploads", "visits", fileName),
         Path.Combine(AppContext.BaseDirectory, "uploads", cleanPath),
         Path.Combine(AppContext.BaseDirectory, "uploads", "selfies", fileName),
-        Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", cleanPath),
-        Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "selfies", fileName),
+        Path.Combine(AppContext.BaseDirectory, "uploads", "visits", fileName),
         Path.Combine(Directory.GetCurrentDirectory(), "uploads", cleanPath),
-        Path.Combine(Directory.GetCurrentDirectory(), "uploads", "selfies", fileName)
+        Path.Combine(Directory.GetCurrentDirectory(), "uploads", "selfies", fileName),
+        Path.Combine(env.ContentRootPath, "wwwroot", "uploads", cleanPath),
+        Path.Combine(env.ContentRootPath, "wwwroot", "uploads", "selfies", fileName),
+        Path.Combine(AppContext.BaseDirectory, "wwwroot", "uploads", cleanPath),
+        Path.Combine(AppContext.BaseDirectory, "wwwroot", "uploads", "selfies", fileName)
     };
 
     foreach (var path in candidates)

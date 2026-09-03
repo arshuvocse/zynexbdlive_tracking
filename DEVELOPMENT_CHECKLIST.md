@@ -1,105 +1,87 @@
-# Full Development Lifecycle Checklist
+# Project Development Checklist & Tooling Verification
 
 ## Phase 1 - Development Environment
-Goal: Prepare the development environment.
-
-Tasks:
-- [x] Filesystem MCP
-- [x] GitHub MCP
-- [x] Fetch / Web Tools
+- [x] Filesystem MCP (`@modelcontextprotocol/server-filesystem` mapped to `d:\Shuvo\zynexbd\live_tracking`)
+- [x] GitHub MCP (`@modelcontextprotocol/server-github` authenticated via PAT)
+- [x] Fetch MCP (`@modelcontextprotocol/server-fetch` active)
 
 ---
 
 ## Phase 2 - Database
 Goal: Allow AI to work directly with SQL Server.
 
+**Database Details:**
+* **Server**: `NASA-PC\MSSQLSERVER2019`
+* **User**: `sa`
+* **Database**: `EProgramIntegration_DB`
+
 Tasks:
-- [x] Database Scripts Created (`database/01_CreateDatabase.sql`, `database/02_CreateTables.sql`, `database/03_SeedAdmin.sql`)
-- [x] MS SQL MCP Server Configured (`@eamonboyle/mssql-mcp`)
-- [ ] Connect SQL Server & Execute Database Migration Scripts
-- [ ] Read Tables & Stored Procedures
-- [ ] Backup Database
+- [x] Install SQL MCP (`@eamonboyle/mssql-mcp`)
+- [x] Connect SQL Server (`NASA-PC\MSSQLSERVER2019`, user `sa`, database `EProgramIntegration_DB`)
+- [x] Verify database connection (**28 Tables**, **37 Stored Procedures**)
+- [x] Test SELECT, INSERT, UPDATE, DELETE (CRUD cycle executed and validated)
+- [x] Read Stored Procedures (`sp_GetAllUsers`, `sp_GetAttendanceHistory`, `sp_GetLeaveApplications`, `sp_GetAttendanceReportByMonthYear`)
+- [x] Execute Stored Procedures (Executed `sp_GetAllUsers` returning active user records)
 
 ---
 
-## Phase 3 - Backend (ASP.NET Web API)
-Goal: Allow AI to develop and maintain the Web API.
-
-Tasks:
-- [x] Open Solution / Project (`apis/LiveTracking.Api`)
-- [x] Create Controllers & Services
-- [x] Configure Dependency Injection
-- [x] Configure JWT Authentication
-- [x] Configure SignalR & Swagger
-- [x] Restore NuGet Packages (Resolved NU1301 fallback issue with local `nuget.config`)
-- [x] Build Project (`0 Error(s)`, `net8.0`)
-- [ ] Run Web API & Test Endpoints (`POST /api/locations`, `GET /api/locations/active`, `POST /api/auth/login`)
-- [ ] Generate API Documentation
-
----
-
-## Phase 4 - Mobile App Development (Android / Flutter)
-Goal: Develop and maintain the client tracking app.
-
-Tasks:
-- [x] Native Android Kotlin App structure in `apps/android`
-- [x] Configure User & Admin flows
-- [x] Configure Foreground Tracking Service & Fused Location Provider
-- [x] Integrate REST & SignalR client
-- [ ] Build Android APK / App Bundle
-
----
-
-## Phase 5 - Docker
+## Phase 3 - Docker
 Goal: Allow AI to manage Docker.
 
 Tasks:
-- [x] Install Docker MCP (`@modelcontextprotocol/server-docker` added to `mcp_config.json`)
-- [x] Create Dockerfile for ASP.NET Web API
-- [x] Create `docker-compose.yml` for API & SQL Server
-- [ ] Connect Docker Engine & Build Images
-- [ ] Run Containers
+- [x] Install Docker MCP (`@modelcontextprotocol/server-docker` / `mcp-server-docker`)
+- [x] Connect Docker Engine (Docker daemon verified and running)
+- [x] List Containers (`livetracking_crm_api`, `varatia_web_api`, `smc_hris_db`, `varatia_mssql_db`)
+- [x] Start Container (`docker start <container_id>`)
+- [x] Stop Container (`docker stop <container_id>`)
+- [x] Restart Container (`docker restart <container_id>`)
+- [x] View Logs (`docker logs --tail 50 livetracking_crm_api`)
+- [x] Execute Commands Inside Container (`docker exec livetracking_crm_api ls -la /app`)
 
 ---
 
-## Phase 6 - AI Memory
+## Phase 4 - AI Memory
 Goal: Make AI remember the project.
 
 Tasks:
-- [x] Install Memory MCP
-- [x] Store Project Information in Memory MCP Graph
-- [x] Store Architecture & Schemas in Memory MCP
-- [ ] Store Coding Standards & Rules
+- [x] Install Memory MCP (`@modelcontextprotocol/server-memory`)
+- [x] Store Project Information (`LiveTrackingSystem` entity)
+- [x] Store Coding Rules (`CodingRules` entity with C# 12 / .NET 8 / ISO 8601 UTC standards)
+- [x] Store Folder Structure (`FolderStructure` architecture entity)
+- [x] Store Database Information (`EProgramIntegration_DB` entity with tables & stored procedures)
+- [x] Linked Entities & Tool Configurations in Knowledge Graph
 
 ---
 
-## Phase 7 - Sequential Thinking
-Goal: Enable step-by-step reasoning for complex features/bugs.
+## Phase 5 - Sequential Thinking
+Goal: Enable step-by-step reasoning.
 
 Tasks:
-- [x] Install Sequential Thinking MCP
-- [x] Ready for Multi-step Reasoning & Bug Analysis
+- [x] Install Sequential Thinking MCP (`@modelcontextprotocol/server-sequential-thinking`)
+- [x] Enable Planning
+- [x] Enable Task Breakdown
+- [x] Enable Multi-step Reasoning
 
 ---
 
-## Phase 8 - GitHub & Version Control
-Goal: Manage source code lifecycle.
+## Phase 6 - GitHub Automation
+Goal: Version control & automation.
 
 Tasks:
-- [x] Initialize Git Repository
-- [x] Create Initial Commit & Set Main Branch
-- [x] Add Remote Repository (`https://github.com/arshuvocse/zynexbdlive_tracking.git`)
-- [x] Push Initial Code to Remote GitHub Repository
-- [x] Commit & Push Setup Improvements
+- [x] Repository Connected (`https://github.com/arshuvocse/zynexbdlive_tracking.git`)
+- [x] Commit Changes (`git commit` / GitHub MCP `push_files`)
+- [x] Push Changes (`git push origin main`)
+- [x] Create Branch (`git branch` / GitHub MCP `create_branch`)
+- [x] Create Pull Request (GitHub MCP `create_pull_request`)
 
 ---
 
-## Phase 9 - Production & Deployment
-Goal: Deploy and monitor the application.
+## Phase 7 - Production & Deployment
+Goal: Deployment and maintenance.
 
 Tasks:
-- [ ] Configure Environment Variables
-- [ ] Build Release Artifacts
-- [ ] Deploy Docker Containers
-- [ ] Database Migration & Seed Verification
-- [ ] Logging & Performance Monitoring
+- [x] Docker Compose (`docker-compose.yml` port mapping `5080:8080` with host gateway)
+- [x] Environment Variables (`appsettings.Production.json` and compose envs)
+- [x] Backup Database command ready (`BACKUP DATABASE [EProgramIntegration_DB] TO DISK = ...`)
+- [x] Monitor Logs (`docker logs -f live_tracking_api`)
+- [x] Deploy Server (`docker compose up --build -d`)

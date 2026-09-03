@@ -383,8 +383,29 @@ class PunchAttendanceActivity : BaseActivity() {
 
     private fun saveBitmapToFile(bitmap: Bitmap) {
         val file = capturedFile ?: File(cacheDir, "selfie_${System.currentTimeMillis()}.jpg").also { capturedFile = it }
+        val maxDim = 960f
+        val w = bitmap.width.toFloat()
+        val h = bitmap.height.toFloat()
+        val scaled = if (w > maxDim || h > maxDim) {
+            val ratio = min(maxDim / w, maxDim / h)
+            Bitmap.createScaledBitmap(bitmap, (w * ratio).toInt(), (h * ratio).toInt(), true)
+        } else {
+            bitmap
+        }
+
+        // Dynamically optimize to target ~150 KB - 200 KB for instantaneous 4G upload
+        var quality = 80
+        val stream = java.io.ByteArrayOutputStream()
+        scaled.compress(Bitmap.CompressFormat.JPEG, quality, stream)
+
+        while (stream.size() > 200 * 1024 && quality > 45) {
+            stream.reset()
+            quality -= 10
+            scaled.compress(Bitmap.CompressFormat.JPEG, quality, stream)
+        }
+
         FileOutputStream(file).use { out ->
-            bitmap.compress(Bitmap.CompressFormat.JPEG, 90, out)
+            stream.writeTo(out)
         }
     }
 

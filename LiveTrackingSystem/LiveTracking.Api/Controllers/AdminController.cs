@@ -196,7 +196,10 @@ public class AdminController : ControllerBase
         var accessibleUserIds = await GetAccessibleEmployeeUserIdsAsync(currentAdminId);
 
         var nowUtc = DateTime.UtcNow;
-        var todayStartUtc = nowUtc.Date;
+        // Bangladesh local date (UTC+6)
+        var todayLocalDate = nowUtc.AddHours(6).Date;
+        var todayStartUtc = todayLocalDate.AddHours(-6);
+        var tomorrowStartUtc = todayStartUtc.AddDays(1);
         var cutoff15m = nowUtc.AddMinutes(-15);
 
         var totalUsers = accessibleUserIds.Count;
@@ -212,24 +215,42 @@ public class AdminController : ControllerBase
 
         // Today's attendance records
         var todayAttendance = await _db.AttendanceRecords
-            .Where(a => accessibleUserIds.Contains(a.UserId) && a.RecordedAtUtc >= todayStartUtc)
+            .Include(a => a.User)
+            .Where(a => accessibleUserIds.Contains(a.UserId) && a.RecordedAtUtc >= todayStartUtc && a.RecordedAtUtc < tomorrowStartUtc)
+            .OrderByDescending(a => a.RecordedAtUtc)
             .ToListAsync();
 
-        var punchedInUserIds = todayAttendance
-            .Where(a => a.Type == "In")
+        var inPunches = todayAttendance
+            .Where(a => a.Type.Equals("In", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        // Unique users who punched in today
+        var punchedInUserIds = inPunches.Select(a => a.UserId).Distinct().ToList();
+        var todayPunchInCount = punchedInUserIds.Count;
+
+        // Late punches today (grouped by unique user)
+        var lateUserIds = inPunches
+            .Where(a => !string.IsNullOrEmpty(a.Status) && a.Status.StartsWith("Late", StringComparison.OrdinalIgnoreCase))
             .Select(a => a.UserId)
             .Distinct()
             .ToList();
-        var todayPunchInCount = punchedInUserIds.Count;
+        var todayLateCount = lateUserIds.Count;
+        var todayOnTimeCount = Math.Max(0, todayPunchInCount - todayLateCount);
 
-        var todayAbsentCount = Math.Max(0, activeUsers - todayPunchInCount);
-
-        // Late attendance: Punched in after 9:30 AM local (or after todayStartUtc + 3.5 hrs UTC assuming UTC+6)
-        var todayLateCount = todayAttendance
-            .Where(a => a.Type == "In" && a.RecordedAtUtc.TimeOfDay > new TimeSpan(3, 30, 0))
-            .Select(a => a.UserId)
+        // Users on approved leave today (local date between StartDate and EndDate)
+        var approvedLeavesToday = await _db.LeaveApplications
+            .Where(l => accessibleUserIds.Contains(l.UserId) 
+                     && l.Status != null && l.Status.ToLower() == "approved"
+                     && l.StartDate.Date <= todayLocalDate && l.EndDate.Date >= todayLocalDate)
+            .Select(l => l.UserId)
             .Distinct()
-            .Count();
+            .ToListAsync();
+        var todayOnLeaveCount = approvedLeavesToday.Count;
+
+        // Today absent: active users who did not punch in and are not on approved leave today
+        var todayAbsentCount = Math.Max(0, activeUsers - todayPunchInCount - todayOnLeaveCount);
+
+        var todayAttendanceRate = activeUsers > 0 ? (todayPunchInCount * 100) / activeUsers : (todayPunchInCount > 0 ? 100 : 0);
 
         // Pending Leave Applications
         var pendingLeaveRequestsCount = await _db.LeaveApplications
@@ -242,14 +263,13 @@ public class AdminController : ControllerBase
         // GPS Disabled or no update today among active users
         var gpsDisabledUsersCount = Math.Max(0, activeUsers - onlineTrackingUsers);
 
-        // Build Attention Items list
+        // Attention items
         var attentionItems = new List<AttentionItemDto>();
-
-        // 1. Pending Leaves
         var pendingLeaves = await _db.LeaveApplications
             .Include(l => l.User)
             .Include(l => l.LeaveType)
             .Where(l => accessibleUserIds.Contains(l.UserId) && l.Status != null && l.Status.ToLower() == "pending")
+            .OrderByDescending(l => l.AppliedAtUtc)
             .Take(5)
             .ToListAsync();
 
@@ -269,11 +289,11 @@ public class AdminController : ControllerBase
             ));
         }
 
-        // 2. Pending / Overdue Follow ups
         var overdueVisits = await _db.CustomerVisits
             .Include(v => v.Customer)
             .Include(v => v.User)
             .Where(v => accessibleUserIds.Contains(v.UserId) && v.NextFollowUpDate.HasValue && !v.IsFollowUpCompleted)
+            .OrderBy(v => v.NextFollowUpDate)
             .Take(5)
             .ToListAsync();
 
@@ -291,6 +311,121 @@ public class AdminController : ControllerBase
                 "Call",
                 visit.VisitDate.ToString("o")
             ));
+        }
+
+        // 3. Collect Daily Activities (ONLY for TODAY)
+        var dailyActivities = new List<DashboardDailyActivityDto>();
+
+        // Attendance activities today
+        foreach (var att in todayAttendance)
+        {
+            var uName = att.User?.FullName ?? att.User?.Username ?? "Officer";
+            var isPunchIn = string.Equals(att.Type, "In", StringComparison.OrdinalIgnoreCase);
+            var locInfo = att.IsWithinGeofence ? "Within Office" : "Outside Office";
+            var localTimeStr = att.RecordedAtUtc.AddHours(6).ToString("hh:mm tt");
+
+            dailyActivities.Add(new DashboardDailyActivityDto(
+                isPunchIn ? "DUTY_IN" : "DUTY_OUT",
+                $"{uName} completed duty {(isPunchIn ? "in" : "out")}",
+                $"Geofence: {locInfo} • Status: {att.Status ?? (isPunchIn ? "On Time" : "Completed")}",
+                localTimeStr,
+                isPunchIn ? "DUTY IN" : "DUTY OUT",
+                isPunchIn ? "#059669" : "#E11D48",
+                att.UserId,
+                uName,
+                att.RecordedAtUtc.ToString("o")
+            ));
+        }
+
+        // Visits recorded today
+        var todayVisits = await _db.CustomerVisits
+            .Include(v => v.Customer)
+            .Include(v => v.User)
+            .Where(v => accessibleUserIds.Contains(v.UserId) && v.VisitDate >= todayStartUtc && v.VisitDate < tomorrowStartUtc)
+            .OrderByDescending(v => v.VisitDate)
+            .ToListAsync();
+
+        foreach (var v in todayVisits)
+        {
+            var uName = v.User?.FullName ?? v.User?.Username ?? "Officer";
+            var custName = v.Customer?.Name ?? "Customer";
+            var localTimeStr = v.VisitDate.AddHours(6).ToString("hh:mm tt");
+            var remarks = string.IsNullOrWhiteSpace(v.Remarks) ? "Visit completed" : v.Remarks;
+
+            dailyActivities.Add(new DashboardDailyActivityDto(
+                "VISIT",
+                $"{uName} visited {custName}",
+                remarks,
+                localTimeStr,
+                "VISIT",
+                "#2563EB",
+                v.UserId,
+                uName,
+                v.VisitDate.ToString("o")
+            ));
+        }
+
+        // Leave applications submitted today
+        var todayLeaveApps = await _db.LeaveApplications
+            .Include(l => l.User)
+            .Include(l => l.LeaveType)
+            .Where(l => accessibleUserIds.Contains(l.UserId) && l.AppliedAtUtc >= todayStartUtc && l.AppliedAtUtc < tomorrowStartUtc)
+            .OrderByDescending(l => l.AppliedAtUtc)
+            .ToListAsync();
+
+        foreach (var l in todayLeaveApps)
+        {
+            var uName = l.User?.FullName ?? l.User?.Username ?? "Officer";
+            var localTimeStr = l.AppliedAtUtc.AddHours(6).ToString("hh:mm tt");
+
+            dailyActivities.Add(new DashboardDailyActivityDto(
+                "LEAVE",
+                $"{uName} applied for {l.LeaveType?.Name ?? "Leave"}",
+                $"Reason: {l.Reason ?? "Personal"} • Status: {l.Status}",
+                localTimeStr,
+                "LEAVE",
+                "#F59E0B",
+                l.UserId,
+                uName,
+                l.AppliedAtUtc.ToString("o")
+            ));
+        }
+
+        // Sort all daily activities descending by timestamp and take top 25
+        dailyActivities = dailyActivities
+            .OrderByDescending(a => DateTime.TryParse(a.TimestampUtc, out var dt) ? dt : DateTime.MinValue)
+            .Take(25)
+            .ToList();
+
+        // 4. Collect Weekly Velocity (Past 7 Days for ALL accessible users)
+        var weeklyVelocity = new List<WeeklyVelocityDayDto>();
+        var sevenDaysStartUtc = todayLocalDate.AddDays(-6).AddHours(-6);
+
+        var past7DaysVisits = await _db.CustomerVisits
+            .Where(v => accessibleUserIds.Contains(v.UserId) && v.VisitDate >= sevenDaysStartUtc && v.VisitDate < tomorrowStartUtc)
+            .Select(v => v.VisitDate)
+            .ToListAsync();
+
+        var past7DaysFollowUps = await _db.CustomerVisits
+            .Where(v => accessibleUserIds.Contains(v.UserId) 
+                     && v.NextFollowUpDate.HasValue 
+                     && v.NextFollowUpDate.Value >= sevenDaysStartUtc 
+                     && v.NextFollowUpDate.Value < tomorrowStartUtc)
+            .Select(v => v.NextFollowUpDate!.Value)
+            .ToListAsync();
+
+        for (int i = 6; i >= 0; i--)
+        {
+            var dayLocal = todayLocalDate.AddDays(-i);
+            var dayStartUtc = dayLocal.AddHours(-6);
+            var dayEndUtc = dayStartUtc.AddDays(1);
+            var dayLabel = (i == 0) ? "Today" : dayLocal.ToString("ddd");
+            var datePrefix = dayLocal.ToString("yyyy-MM-dd");
+
+            var vCount = past7DaysVisits.Count(v => v >= dayStartUtc && v < dayEndUtc);
+            var fCount = past7DaysFollowUps.Count(f => f >= dayStartUtc && f < dayEndUtc);
+
+            weeklyVelocity.Add(new WeeklyVelocityDayDto(dayLabel, datePrefix, vCount, fCount));
         }
 
         // System Health
@@ -312,7 +447,12 @@ public class AdminController : ControllerBase
             pendingCustomerFollowUpsCount,
             gpsDisabledUsersCount,
             attentionItems,
-            health
+            health,
+            todayOnTimeCount,
+            todayOnLeaveCount,
+            todayAttendanceRate,
+            dailyActivities,
+            weeklyVelocity
         ));
     }
 

@@ -197,21 +197,14 @@ class AdminOverviewDashboardActivity : BaseActivity() {
             try {
                 val api = RetrofitClient.getApiService(this@AdminOverviewDashboardActivity)
 
-                val summaryDeferred = async { ApiClient.getApiService(this@AdminOverviewDashboardActivity).getExecutiveSummary() }
-                val usersDeferred = async { api.getUsers() }
-
+                val summaryDeferred = async { api.getExecutiveSummary() }
                 val currentMonth = Calendar.getInstance().get(Calendar.MONTH) + 1
                 val currentYear = Calendar.getInstance().get(Calendar.YEAR)
                 val reportDeferred = async { api.getEmployeePerformanceReport(year = currentYear, month = currentMonth) }
-                val attendanceDeferred = async { api.getAllAttendance() }
-                val leavesDeferred = async { api.getLeaveApplications() }
                 val subDeferred = async { api.getSubscriptionStatus() }
 
                 val summaryRes = summaryDeferred.await()
-                val usersRes = usersDeferred.await()
                 val reportRes = reportDeferred.await()
-                val attendanceRes = attendanceDeferred.await()
-                val leavesRes = leavesDeferred.await()
                 val subRes = subDeferred.await()
 
                 // Subscription Warning Banner / Modal Check
@@ -238,10 +231,7 @@ class AdminOverviewDashboardActivity : BaseActivity() {
                     }
                 }
 
-                val officers = usersRes.body()?.filter { it.role != "Admin" } ?: emptyList()
-                val totalEmployees = officers.size
-
-                // 1. Process KPI Summary
+                // 1. Process KPI Summary, Attendance Donut, Weekly Velocity & Daily Activities
                 if (summaryRes.isSuccessful && summaryRes.body() != null) {
                     val summary = summaryRes.body()!!
                     binding.textMetricTotalUsers.text = summary.totalUsers.toString()
@@ -259,62 +249,65 @@ class AdminOverviewDashboardActivity : BaseActivity() {
                     } else {
                         binding.containerAttentionSection.visibility = View.GONE
                     }
+
+                    // 2. Process Attendance Donut / Pie Chart (Directly from accurate daily summary)
+                    val onTimeCount = summary.todayOnTimeCount
+                    val lateCount = summary.todayLateCount
+                    val approvedLeavesToday = summary.todayOnLeaveCount
+                    val absentCount = summary.todayAbsentCount
+                    val attendanceRate = summary.todayAttendanceRate
+
+                    val donutSlices = listOf(
+                        DonutChartView.Slice("On Time", onTimeCount.toFloat(), Color.parseColor("#10B981")),
+                        DonutChartView.Slice("Late", lateCount.toFloat(), Color.parseColor("#F59E0B")),
+                        DonutChartView.Slice("Leave", approvedLeavesToday.toFloat(), Color.parseColor("#8B5CF6")),
+                        DonutChartView.Slice("Absent", absentCount.toFloat(), Color.parseColor("#EF4444"))
+                    )
+                    binding.donutChartAttendance.setData(donutSlices, "$attendanceRate%", "Present Today")
+                    binding.textChartOnTime.text = "🟢 $onTimeCount On Time"
+                    binding.textChartLate.text = "🟡 $lateCount Late Entry"
+                    binding.textChartLeave.text = "🏖️ $approvedLeavesToday On Leave"
+                    binding.textChartAbsent.text = "🔴 $absentCount Absent"
+
+                    // 3. Process Weekly Field Activity Bar Chart (from API aggregated 7-day data)
+                    if (summary.weeklyFieldVelocity.isNotEmpty()) {
+                        val barEntries = summary.weeklyFieldVelocity.map { day ->
+                            BarChartView.BarEntry(day.dayLabel, day.visitCount.toFloat(), day.followUpCount.toFloat())
+                        }
+                        binding.barChartWeeklyActivity.setData(barEntries)
+                    }
+
+                    // 4. Process Live Daily Activity Feed (TODAY'S ACTIVITIES ONLY)
+                    val activities = mutableListOf<DashboardActivityItem>()
+                    for (item in summary.dailyActivities) {
+                        val iconRes = when (item.activityType) {
+                            "LEAVE" -> R.drawable.ic_leave_custom
+                            "VISIT" -> R.drawable.ic_pulse
+                            else -> R.drawable.ic_attendance_custom
+                        }
+                        activities.add(
+                            DashboardActivityItem(
+                                title = item.title,
+                                subtitle = item.subtitle,
+                                time = item.time,
+                                tag = item.tag,
+                                tagColor = item.tagColor,
+                                iconRes = iconRes
+                            )
+                        )
+                    }
+
+                    if (activities.isNotEmpty()) {
+                        binding.textNoRecentActivity.visibility = View.GONE
+                        binding.recyclerActivityFeed.visibility = View.VISIBLE
+                        activityFeedAdapter.setItems(activities)
+                    } else {
+                        binding.textNoRecentActivity.visibility = View.VISIBLE
+                        binding.recyclerActivityFeed.visibility = View.GONE
+                    }
                 }
 
-                // 2. Process Attendance Donut / Pie Chart
-                val todayAtt = attendanceRes.body() ?: emptyList()
-                val todayInPunches = todayAtt.filter { it.type == "In" }
-                val onTimeCount = todayInPunches.count { it.status == null || it.status.startsWith("On Time", ignoreCase = true) }
-                val lateCount = todayInPunches.count { it.status != null && it.status.startsWith("Late", ignoreCase = true) }
-                val approvedLeavesToday = leavesRes.body()?.count { it.status == "Approved" } ?: 0
-                val presentCount = onTimeCount + lateCount
-                val absentCount = maxOf(0, totalEmployees - (presentCount + approvedLeavesToday))
-
-                val attendanceRate = if (totalEmployees > 0) {
-                    (presentCount * 100) / totalEmployees
-                } else if (presentCount > 0) 100 else 0
-
-                val donutSlices = listOf(
-                    DonutChartView.Slice("On Time", onTimeCount.toFloat(), Color.parseColor("#10B981")),
-                    DonutChartView.Slice("Late", lateCount.toFloat(), Color.parseColor("#F59E0B")),
-                    DonutChartView.Slice("Leave", approvedLeavesToday.toFloat(), Color.parseColor("#8B5CF6")),
-                    DonutChartView.Slice("Absent", absentCount.toFloat(), Color.parseColor("#EF4444"))
-                )
-                binding.donutChartAttendance.setData(donutSlices, "$attendanceRate%", "Present Today")
-                binding.textChartOnTime.text = "🟢 $onTimeCount On Time"
-                binding.textChartLate.text = "🟡 $lateCount Late Entry"
-                binding.textChartLeave.text = "🏖️ $approvedLeavesToday On Leave"
-                binding.textChartAbsent.text = "🔴 $absentCount Absent"
-
-                // 3. Process Weekly Field Activity Bar Chart
-                val allVisits = mutableListOf<CustomerVisit>()
-                val allFups = mutableListOf<com.zynexbd.livetracking.models.FollowUpItem>()
-                for (u in officers.take(5)) {
-                    try {
-                        val v = api.getMyVisits(targetUserId = u.id).body()
-                        if (v != null) allVisits.addAll(v)
-                        val f = api.getFollowUps(targetUserId = u.id).body()
-                        if (f != null) allFups.addAll(f)
-                    } catch (_: Exception) {}
-                }
-
-                val barEntries = mutableListOf<BarChartView.BarEntry>()
-                val dayFormat = SimpleDateFormat("EEE", Locale.US)
-                val ymdFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-
-                for (i in 6 downTo 0) {
-                    val tempCal = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -i) }
-                    val dayLabel = if (i == 0) "Today" else dayFormat.format(tempCal.time)
-                    val datePrefix = ymdFormat.format(tempCal.time)
-
-                    val vCount = allVisits.count { it.visitDate.startsWith(datePrefix) }.toFloat()
-                    val fCount = allFups.count { (it.followUpDate ?: "").startsWith(datePrefix) }.toFloat()
-
-                    barEntries.add(BarChartView.BarEntry(dayLabel, vCount, fCount))
-                }
-                binding.barChartWeeklyActivity.setData(barEntries)
-
-                // 4. Process Top Performers / Leaderboard
+                // 5. Process Top Performers / Leaderboard
                 if (reportRes.isSuccessful && reportRes.body() != null) {
                     val employees = reportRes.body()?.employees.orEmpty().sortedByDescending { it.totalVisits + it.completedFollowUps }
                     if (employees.isNotEmpty()) {
@@ -335,71 +328,6 @@ class AdminOverviewDashboardActivity : BaseActivity() {
                         binding.textTopPerformer3Name.text = name3
                         binding.textTopPerformer3Stats.text = "📍 ${p3.totalVisits} Visits • ${p3.completedFollowUps} F-Up"
                     }
-                }
-
-                // 5. Process Live Activity Feed
-                val activities = mutableListOf<DashboardActivityItem>()
-
-                // Add recent leaves
-                if (leavesRes.isSuccessful && leavesRes.body() != null) {
-                    leavesRes.body()!!.take(2).forEach { l ->
-                        val date = l.startDate?.take(10) ?: "Recent"
-                        activities.add(
-                            DashboardActivityItem(
-                                title = "${l.userName ?: "Officer"} applied for ${l.leaveTypeName ?: "Leave"}",
-                                subtitle = "Reason: ${l.reason ?: "Personal"} • Status: ${l.status}",
-                                time = date,
-                                tag = "LEAVE",
-                                tagColor = "#F59E0B",
-                                iconRes = R.drawable.ic_leave_custom
-                            )
-                        )
-                    }
-                }
-
-                // Add recent attendance records
-                if (attendanceRes.isSuccessful && attendanceRes.body() != null) {
-                    attendanceRes.body()!!.take(4).forEach { att ->
-                        val isPunchIn = att.type == "In"
-                        val title = "${att.userName ?: "Officer"} completed duty ${if (isPunchIn) "in" else "out"}"
-                        val locInfo = if (att.isWithinGeofence) "Within Office" else "Outside Office"
-                        activities.add(
-                            DashboardActivityItem(
-                                title = title,
-                                subtitle = "Geofence: $locInfo",
-                                time = att.timestamp ?: "Today",
-                                tag = if (isPunchIn) "DUTY IN" else "DUTY OUT",
-                                tagColor = if (isPunchIn) "#059669" else "#E11D48",
-                                iconRes = R.drawable.ic_attendance_custom
-                            )
-                        )
-                    }
-                }
-
-                // Add completed visits from officers
-                for (v in allVisits.filter { it.visitStatus == "Completed" }.take(3)) {
-                    val dateStr = v.visitDate.replace("T", " ").take(16)
-                    val custName = v.customerName.ifBlank { "Customer" }
-                    val visitRemarks = v.remarks ?: "Visit completed"
-                    activities.add(
-                        DashboardActivityItem(
-                            title = "${v.userName.ifBlank { "Officer" }} completed visit",
-                            subtitle = "$custName • $visitRemarks",
-                            time = dateStr,
-                            tag = "VISIT",
-                            tagColor = "#2563EB",
-                            iconRes = R.drawable.ic_pulse
-                        )
-                    )
-                }
-
-                if (activities.isNotEmpty()) {
-                    binding.textNoRecentActivity.visibility = View.GONE
-                    binding.recyclerActivityFeed.visibility = View.VISIBLE
-                    activityFeedAdapter.setItems(activities.take(10))
-                } else {
-                    binding.textNoRecentActivity.visibility = View.VISIBLE
-                    binding.recyclerActivityFeed.visibility = View.GONE
                 }
 
             } catch (e: Exception) {

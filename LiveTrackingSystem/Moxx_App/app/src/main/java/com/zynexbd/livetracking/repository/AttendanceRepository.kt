@@ -28,9 +28,10 @@ class AttendanceRepository(context: Context) {
 
         val resp = if (isPunchIn) api.punchIn(selfiePart, latPart, lngPart) else api.punchOut(selfiePart, latPart, lngPart)
         if (resp.isSuccessful) {
-            resp.body() ?: error("Empty response")
+            resp.body() ?: error("Empty response from server")
         } else {
-            error(resp.errorBody()?.string() ?: "Duty attendance failed (${resp.code()})")
+            val err = resp.errorBody()?.string()?.takeIf { it.isNotBlank() } ?: "Duty attendance failed (HTTP ${resp.code()})"
+            error(err)
         }
     }
 
