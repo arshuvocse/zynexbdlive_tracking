@@ -508,4 +508,20 @@ abstract class BaseActivity : AppCompatActivity() {
         startActivity(intent)
         overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
     }
+
+    fun showCustomToast(message: String, type: com.zynexbd.livetracking.utils.ToastType = com.zynexbd.livetracking.utils.ToastType.INFO, title: String? = null) {
+        com.zynexbd.livetracking.utils.CustomToast.show(this, message, type, title)
+    }
+
+    fun showSuccess(message: String, title: String? = null) {
+        com.zynexbd.livetracking.utils.CustomToast.showSuccess(this, message, title)
+    }
+
+    fun showError(message: String, title: String? = null) {
+        com.zynexbd.livetracking.utils.CustomToast.showError(this, message, title)
+    }
+
+    fun showWarning(message: String, title: String? = null) {
+        com.zynexbd.livetracking.utils.CustomToast.showWarning(this, message, title)
+    }
 }

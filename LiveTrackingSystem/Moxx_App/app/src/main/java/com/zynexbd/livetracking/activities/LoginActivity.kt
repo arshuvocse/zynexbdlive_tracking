@@ -8,6 +8,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import com.zynexbd.livetracking.databinding.ActivityLoginBinding
 import com.zynexbd.livetracking.utils.AppUpdateHelper
+import com.zynexbd.livetracking.utils.CustomToast
 import com.zynexbd.livetracking.utils.SessionManager
 import com.zynexbd.livetracking.viewmodel.LoginUiState
 import com.zynexbd.livetracking.viewmodel.LoginViewModel
@@ -62,6 +63,10 @@ class LoginActivity : BaseActivity() {
         binding.buttonLogin.setOnClickListener {
             val username = binding.editUsername.text.toString().trim()
             val password = binding.editPassword.text.toString()
+            if (username.isBlank() || password.isBlank()) {
+                CustomToast.showWarning(this, if (isEn) "Please enter username and password." else "দয়া করে ইউজারনেম এবং পাসওয়ার্ড দিন।")
+                return@setOnClickListener
+            }
             viewModel.login(username, password)
         }
 
@@ -81,7 +86,7 @@ class LoginActivity : BaseActivity() {
                         com.zynexbd.livetracking.utils.NetworkErrorHandler.isHtml(state.message) -> if (isEn) "Server error occurred. Please update the app or try again later." else "সার্ভারে সমস্যা হয়েছে। দয়া করে অ্যাপটি আপডেট করুন অথবা কিছুক্ষণ পর চেষ্টা করুন।"
                         else -> state.message
                     }
-                    Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+                    CustomToast.showError(this, msg)
                 }
                 is LoginUiState.Success -> {
                     binding.buttonLogin.isEnabled = true
@@ -102,7 +107,7 @@ class LoginActivity : BaseActivity() {
                 startActivity(Intent(this, UserHomeActivity::class.java))
                 finish()
             }
-            else -> Toast.makeText(this, "Unknown role.", Toast.LENGTH_SHORT).show()
+            else -> CustomToast.showWarning(this, "Unknown role.")
         }
     }
 }
