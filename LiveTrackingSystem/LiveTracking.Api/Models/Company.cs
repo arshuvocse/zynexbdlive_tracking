@@ -5,6 +5,7 @@ public class Company
     public int CompanyId { get; set; }
     public string CompanyName { get; set; } = string.Empty;
     public string CompanyCode { get; set; } = string.Empty;
+    public string? BrandLogo { get; set; }
     public string? ContactPerson { get; set; }
     public string? ContactPhone { get; set; }
     public string? ContactEmail { get; set; }

@@ -13,7 +13,8 @@ public record CompanyDto(
     int TotalOffices,
     int TotalAdmins,
     int ActiveOfficersCount,
-    string SubscriptionStatus
+    string SubscriptionStatus,
+    string? BrandLogo = null
 );
 
 public record CreateCompanyRequest(
@@ -23,7 +24,8 @@ public record CreateCompanyRequest(
     string? ContactPhone,
     string? ContactEmail,
     int? MaxUserLimit,
-    string? PaymentDueDate
+    string? PaymentDueDate,
+    string? BrandLogo = null
 );
 
 public record UpdateCompanyRequest(
@@ -33,7 +35,8 @@ public record UpdateCompanyRequest(
     string? ContactEmail,
     int? MaxUserLimit,
     string? PaymentDueDate,
-    bool? IsActive
+    bool? IsActive,
+    string? BrandLogo = null
 );
 
 public record CompanyStatsDto(
@@ -46,5 +49,6 @@ public record CompanyStatsDto(
     int MaxUserLimit,
     bool IsQuotaFull,
     string? PaymentDueDate,
-    string SubscriptionStatus
+    string SubscriptionStatus,
+    string? BrandLogo = null
 );

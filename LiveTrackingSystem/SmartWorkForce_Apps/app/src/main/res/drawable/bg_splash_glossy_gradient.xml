@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Base smooth glossy light gradient -->
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="315"
+                android:startColor="#E6F2FE"
+                android:centerColor="#F8FAFC"
+                android:endColor="#E8EEFC"
+                android:type="linear" />
+        </shape>
+    </item>
+    <!-- Top glowing ambient radial sheen -->
+    <item android:bottom="350dp" android:right="80dp">
+        <shape android:shape="oval">
+            <gradient
+                android:type="radial"
+                android:gradientRadius="360dp"
+                android:startColor="#3338BDF8"
+                android:endColor="#00FFFFFF" />
+        </shape>
+    </item>
+    <!-- Bottom right subtle azure glow -->
+    <item android:top="400dp" android:left="100dp">
+        <shape android:shape="oval">
+            <gradient
+                android:type="radial"
+                android:gradientRadius="380dp"
+                android:startColor="#264F46E5"
+                android:endColor="#00FFFFFF" />
+        </shape>
+    </item>
+</layer-list>

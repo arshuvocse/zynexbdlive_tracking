@@ -86,6 +86,15 @@ class UserHomeActivity : BaseActivity() {
         setupClickListeners()
         setupBottomNavigation()
 
+        binding.swipeRefreshLayout.setColorSchemeResources(
+            R.color.colorPrimary,
+            R.color.statusActive
+        )
+        binding.swipeRefreshLayout.setOnRefreshListener {
+            updateDeviceStatusIndicators()
+            loadFieldUserDashboardStats(isManualRefresh = true)
+        }
+
         // Prompt standard Android runtime permissions popup immediately after login
         requestAppPermissions()
     }
@@ -262,9 +271,12 @@ class UserHomeActivity : BaseActivity() {
         return if (level >= 0 && scale > 0) (level * 100 / scale) else 100
     }
 
-    private fun loadFieldUserDashboardStats() {
+    private fun loadFieldUserDashboardStats(isManualRefresh: Boolean = false) {
         lifecycleScope.launch {
             try {
+                if (isManualRefresh) {
+                    binding.swipeRefreshLayout.isRefreshing = true
+                }
                 val api = RetrofitClient.getApiService(this@UserHomeActivity)
                 
                 // 1. Fetch Today's Attendance Status directly from API
@@ -294,9 +306,19 @@ class UserHomeActivity : BaseActivity() {
                     }
                     binding.textVisitsCount.text = stats.todayVisitsCount.toString()
                     binding.textFollowUpsCount.text = stats.pendingFollowUpsCount.toString()
+                    if (isManualRefresh) {
+                        val isEn = LanguageManager.isEnglish(this@UserHomeActivity)
+                        Toast.makeText(this@UserHomeActivity, if (isEn) "Dashboard updated" else "ড্যাশবোর্ড তথ্য আপডেট হয়েছে", Toast.LENGTH_SHORT).show()
+                    }
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to load field user stats", e)
+                if (isManualRefresh) {
+                    val isEn = LanguageManager.isEnglish(this@UserHomeActivity)
+                    Toast.makeText(this@UserHomeActivity, if (isEn) "Unable to connect to server." else "সার্ভারের সাথে সংযোগ করা যায়নি।", Toast.LENGTH_SHORT).show()
+                }
+            } finally {
+                binding.swipeRefreshLayout.isRefreshing = false
             }
         }
     }

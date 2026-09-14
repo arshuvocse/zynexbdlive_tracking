@@ -10,7 +10,8 @@ public record LoginResponse(
     string Username,
     string Role,
     int? CompanyId = null,
-    string? CompanyName = null
+    string? CompanyName = null,
+    string? BrandLogo = null
 );
 
 public record ApiResponse<T>(

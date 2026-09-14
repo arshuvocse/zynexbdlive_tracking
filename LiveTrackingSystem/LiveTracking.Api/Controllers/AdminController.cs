@@ -200,14 +200,14 @@ public class AdminController : ControllerBase
         var todayLocalDate = nowUtc.AddHours(6).Date;
         var todayStartUtc = todayLocalDate.AddHours(-6);
         var tomorrowStartUtc = todayStartUtc.AddDays(1);
-        var cutoff15m = nowUtc.AddMinutes(-15);
+        var cutoff10m = nowUtc.AddMinutes(-10);
 
         var totalUsers = accessibleUserIds.Count;
         var activeUsers = await _db.Users.CountAsync(u => accessibleUserIds.Contains(u.UserId) && u.IsActive);
 
-        // Drivers with location pings in last 15 minutes
+        // Drivers with location pings in last 10 minutes
         var recentPings = await _db.DriverLocations
-            .Where(l => accessibleUserIds.Contains(l.UserId) && l.RecordedAtUtc >= cutoff15m)
+            .Where(l => accessibleUserIds.Contains(l.UserId) && l.RecordedAtUtc >= cutoff10m)
             .Select(l => l.UserId)
             .Distinct()
             .ToListAsync();
@@ -311,6 +311,77 @@ public class AdminController : ControllerBase
                 "Call",
                 visit.VisitDate.ToString("o")
             ));
+        }
+
+        // Offline during company shift detection (>= 10 minutes inactive)
+        var localTimeOfDay = nowUtc.AddHours(6).TimeOfDay;
+        var punchedOutUserIds = todayAttendance
+            .Where(a => a.Type.Equals("Out", StringComparison.OrdinalIgnoreCase))
+            .Select(a => a.UserId)
+            .Distinct()
+            .ToHashSet();
+
+        var onDutyUserIds = punchedInUserIds
+            .Where(uid => !punchedOutUserIds.Contains(uid) && !approvedLeavesToday.Contains(uid))
+            .ToList();
+
+        if (onDutyUserIds.Count > 0)
+        {
+            var onDutyUsers = await _db.Users
+                .Include(u => u.Shift)
+                .Where(u => onDutyUserIds.Contains(u.UserId))
+                .ToListAsync();
+
+            var companyIds = onDutyUsers.Where(u => u.CompanyId.HasValue).Select(u => u.CompanyId!.Value).Distinct().ToList();
+            var defaultShifts = await _db.Shifts
+                .Where(s => companyIds.Contains(s.CompanyId ?? 0) && s.IsActive)
+                .ToListAsync();
+
+            var inactiveUserIds = onDutyUserIds.Where(uid => !recentPings.Contains(uid)).ToList();
+            if (inactiveUserIds.Count > 0)
+            {
+                var latestPingMap = await _db.DriverLocations
+                    .Where(l => inactiveUserIds.Contains(l.UserId))
+                    .GroupBy(l => l.UserId)
+                    .Select(g => new { UserId = g.Key, LastPing = g.Max(l => l.RecordedAtUtc) })
+                    .ToDictionaryAsync(x => x.UserId, x => x.LastPing);
+
+                foreach (var emp in onDutyUsers.Where(u => inactiveUserIds.Contains(u.UserId)))
+                {
+                    var shift = emp.Shift ?? defaultShifts.FirstOrDefault(s => s.CompanyId == emp.CompanyId && s.IsDefault)
+                                          ?? defaultShifts.FirstOrDefault(s => s.CompanyId == emp.CompanyId);
+
+                    if (shift != null &&
+                        TimeSpan.TryParse(shift.StartTime, out var sStart) &&
+                        TimeSpan.TryParse(shift.EndTime, out var sEnd))
+                    {
+                        bool inShift = sStart < sEnd 
+                            ? (localTimeOfDay >= sStart && localTimeOfDay <= sEnd)
+                            : (localTimeOfDay >= sStart || localTimeOfDay <= sEnd);
+
+                        if (inShift)
+                        {
+                            latestPingMap.TryGetValue(emp.UserId, out var lastPingUtc);
+                            int inactiveMins = lastPingUtc != default 
+                                ? (int)(nowUtc - lastPingUtc).TotalMinutes 
+                                : 10;
+
+                            var uName = !string.IsNullOrWhiteSpace(emp.FullName) ? emp.FullName : emp.Username;
+                            attentionItems.Add(new AttentionItemDto(
+                                $"offline_{emp.UserId}",
+                                "OfflineInShift",
+                                $"⚠️ Offline in Shift: {uName}",
+                                $"{uName} is offline for {inactiveMins}m during {shift.ShiftName}. GPS or phone may be turned off.",
+                                emp.UserId,
+                                uName,
+                                "High",
+                                "Track",
+                                (lastPingUtc != default ? lastPingUtc : nowUtc).ToString("o")
+                            ));
+                        }
+                    }
+                }
+            }
         }
 
         // 3. Collect Daily Activities (ONLY for TODAY)

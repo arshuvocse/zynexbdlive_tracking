@@ -77,6 +77,7 @@ class LoginActivity : BaseActivity() {
                     val msg = when {
                         state.message.contains("Invalid username or password", ignoreCase = true) -> if (isEn) "Invalid username or password." else "ইউজারনেম বা পাসওয়ার্ড সঠিক নয়।"
                         state.message.contains("Network", ignoreCase = true) || state.message.contains("Connection", ignoreCase = true) -> if (isEn) "Server connection failed. Check your network." else "সারভারে কানেক্ট করা যাচ্ছে না। নেটওয়ার্ক চেক করুন।"
+                        com.zynexbd.livetracking.utils.NetworkErrorHandler.isHtml(state.message) -> if (isEn) "Server error occurred. Please update the app or try again later." else "সার্ভারে সমস্যা হয়েছে। দয়া করে অ্যাপটি আপডেট করুন অথবা কিছুক্ষণ পর চেষ্টা করুন।"
                         else -> state.message
                     }
                     Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()

@@ -33,6 +33,7 @@ public class LiveTrackingDbContext : DbContext
             e.HasIndex(c => c.CompanyCode).IsUnique();
             e.Property(c => c.CompanyName).HasMaxLength(200);
             e.Property(c => c.CompanyCode).HasMaxLength(50);
+            e.Property(c => c.BrandLogo).HasMaxLength(500);
             e.HasMany(c => c.Users)
                 .WithOne(u => u.Company)
                 .HasForeignKey(u => u.CompanyId)

@@ -4,6 +4,7 @@ import android.content.Context
 import com.zynexbd.livetracking.models.LoginRequest
 import com.zynexbd.livetracking.models.LoginResponse
 import com.zynexbd.livetracking.network.ApiClient
+import com.zynexbd.livetracking.utils.NetworkErrorHandler
 import com.zynexbd.livetracking.utils.SessionManager
 
 sealed class AuthResult {
@@ -59,18 +60,16 @@ class AuthRepository(private val context: Context) {
             } else if (resp.code() == 401) {
                 AuthResult.Error("ইউজারনেম বা পাসওয়ার্ড সঠিক নয়।")
             } else {
-                val rawBody = resp.errorBody()?.string()?.takeIf { it.isNotBlank() }
-                val parsedMsg = try {
-                    if (rawBody != null && rawBody.startsWith("{")) {
-                        org.json.JSONObject(rawBody).optString("message", rawBody)
-                    } else rawBody
-                } catch (e: Exception) {
-                    rawBody
-                }
-                AuthResult.Error(parsedMsg ?: "Server error (${resp.code()}).")
+                val rawBody = resp.errorBody()?.string()
+                val friendlyMsg = NetworkErrorHandler.parseHttpError(
+                    code = resp.code(),
+                    errorBody = rawBody,
+                    fallbackMessage = "লগইন সম্পন্ন করা যায়নি (${resp.code()})।"
+                )
+                AuthResult.Error(friendlyMsg)
             }
         } catch (e: Exception) {
-            AuthResult.Error(e.message ?: "Network error.")
+            AuthResult.Error(NetworkErrorHandler.friendlyMessage(e))
         }
     }
 

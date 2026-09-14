@@ -138,20 +138,26 @@ object ReportExporter {
                         sb.append("\n\nDETAILED ATTENDANCE DUTY LOGS\n")
                     }
 
-                    // Section 2: Detailed Logs (Date placed first right after SL)
-                    sb.append("SL,Date,Employee Name,Shift,Duty Type,Time,Duty Duration (HH:MM),Status,Office Geofence Status,Latitude,Longitude\n")
-                    records.forEachIndexed { index, item ->
-                        val sl = index + 1
-                        val name = escapeCsv(item.userName ?: "Officer")
-                        val shift = escapeCsv(item.shiftName ?: "General Shift")
-                        val type = if (item.type == "In") "Duty In" else "Duty Out"
-                        val status = escapeCsv(formatLateStatus(item.status ?: "On Time"))
-                        val (dateStr, timeStr) = formatDateTime(item.timestamp)
-                        val dutyDuration = calculateDayDutyDuration(item, records)
-                        val geofence = if (item.isWithinGeofence) "Within Office" else "Outside Office"
-                        val lat = item.latitude?.toString() ?: ""
-                        val lng = item.longitude?.toString() ?: ""
-                        sb.append("$sl,\"$dateStr\",$name,$shift,$type,\"$timeStr\",\"$dutyDuration\",$status,$geofence,$lat,$lng\n")
+                    // Section 2: Detailed Daily Logs — Employee + Date = One Row
+                    val dailyRowsExcel = groupToDailyRows(records)
+                    sb.append("SL,Date,Employee Name,Shift,Duty In Time,Duty Out Time,Duty Duration (HH:MM),Status,In Geofence,Out Geofence,In Latitude,In Longitude,Out Latitude,Out Longitude\n")
+                    dailyRowsExcel.forEach { row ->
+                        sb.append(
+                            "${row.sl}," +
+                            "\"${row.dateStr}\"," +
+                            "${escapeCsv(row.employeeName)}," +
+                            "${escapeCsv(row.shiftName)}," +
+                            "\"${row.inTime}\"," +
+                            "\"${row.outTime}\"," +
+                            "\"${row.duration}\"," +
+                            "${escapeCsv(row.status)}," +
+                            "${escapeCsv(row.inGeofence)}," +
+                            "${escapeCsv(row.outGeofence)}," +
+                            "${row.inLat}," +
+                            "${row.inLng}," +
+                            "${row.outLat}," +
+                            "${row.outLng}\n"
+                        )
                     }
                     sb.append("\nGenerated On: $timeStamp | Powered by ZyNex Soft Tech\n")
                     fos.write(sb.toString().toByteArray(Charsets.UTF_8))
@@ -195,59 +201,61 @@ object ReportExporter {
                 val pdfDoc = PdfDocument()
                 val pageWidth = 595 // A4 standard width
                 val pageHeight = 842 // A4 standard height
-                val rowHeight = 36f
-                val recordsPerPage = 16
+                val rowHeight = 40f
+                val recordsPerPage = 14
 
-                val logPages = if (records.isNotEmpty()) ((records.size - 1) / recordsPerPage) + 1 else 0
+                // Group raw records into Employee+Date daily rows before rendering
+                val dailyRows = groupToDailyRows(records)
+
+                val logPages = if (dailyRows.isNotEmpty()) ((dailyRows.size - 1) / recordsPerPage) + 1 else 0
                 val summaryPages = if (summaries.isNotEmpty()) ((summaries.size - 1) / 22) + 1 else 0
                 val totalPages = maxOf(1, summaryPages + logPages)
                 val currentDate = SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.getDefault()).format(Date())
 
-                // Pre-fetch selfie bitmaps
+                // Pre-fetch selfie bitmaps — Duty In selfie preferred; Duty Out as fallback
                 val bitmapCache = mutableMapOf<Long, android.graphics.Bitmap?>()
-                for (rec in records) {
-                    if (!rec.selfieUrl.isNullOrBlank()) {
-                        try {
-                            val rawUrl = rec.selfieUrl.trim()
-                            val fullUrl = if (rawUrl.startsWith("http://", ignoreCase = true) || rawUrl.startsWith("https://", ignoreCase = true)) {
-                                rawUrl
-                            } else {
-                                val baseUrl = com.zynexbd.livetracking.BuildConfig.API_BASE_URL.trimEnd('/')
-                                val path = rawUrl.replace("\\", "/").trimStart('/')
-                                "$baseUrl/$path"
-                            }
-
-                            var bmp: android.graphics.Bitmap? = null
-                            try {
-                                val conn = (java.net.URL(fullUrl).openConnection() as java.net.HttpURLConnection).apply {
-                                    connectTimeout = 6000
-                                    readTimeout = 6000
-                                    doInput = true
-                                    connect()
-                                }
-                                if (conn.responseCode == java.net.HttpURLConnection.HTTP_OK) {
-                                    val stream = conn.inputStream
-                                    bmp = android.graphics.BitmapFactory.decodeStream(stream)
-                                    stream.close()
-                                }
-                                conn.disconnect()
-                            } catch (_: Exception) {}
-
-                            if (bmp == null) {
-                                try {
-                                    bmp = com.bumptech.glide.Glide.with(context)
-                                        .asBitmap()
-                                        .load(fullUrl)
-                                        .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.ALL)
-                                        .submit(80, 80)
-                                        .get()
-                                } catch (_: Exception) {}
-                            }
-
-                            bitmapCache[rec.id] = bmp
-                        } catch (e: Exception) {
-                            bitmapCache[rec.id] = null
+                for (row in dailyRows) {
+                    val cacheKey = row.inRecord?.id ?: row.outRecord?.id ?: continue
+                    val rawUrl = row.selfieUrl?.trim() ?: continue
+                    try {
+                        val fullUrl = if (rawUrl.startsWith("http://", ignoreCase = true) || rawUrl.startsWith("https://", ignoreCase = true)) {
+                            rawUrl
+                        } else {
+                            val baseUrl = com.zynexbd.livetracking.BuildConfig.API_BASE_URL.trimEnd('/')
+                            val path = rawUrl.replace("\\", "/").trimStart('/')
+                            "$baseUrl/$path"
                         }
+
+                        var bmp: android.graphics.Bitmap? = null
+                        try {
+                            val conn = (java.net.URL(fullUrl).openConnection() as java.net.HttpURLConnection).apply {
+                                connectTimeout = 6000
+                                readTimeout = 6000
+                                doInput = true
+                                connect()
+                            }
+                            if (conn.responseCode == java.net.HttpURLConnection.HTTP_OK) {
+                                val stream = conn.inputStream
+                                bmp = android.graphics.BitmapFactory.decodeStream(stream)
+                                stream.close()
+                            }
+                            conn.disconnect()
+                        } catch (_: Exception) {}
+
+                        if (bmp == null) {
+                            try {
+                                bmp = com.bumptech.glide.Glide.with(context)
+                                    .asBitmap()
+                                    .load(fullUrl)
+                                    .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.ALL)
+                                    .submit(80, 80)
+                                    .get()
+                            } catch (_: Exception) {}
+                        }
+
+                        bitmapCache[cacheKey] = bmp
+                    } catch (_: Exception) {
+                        bitmapCache[cacheKey] = null
                     }
                 }
 
@@ -388,135 +396,185 @@ object ReportExporter {
                     }
                 }
 
-                // 2. Render Detailed Log Pages
+                // 2. Render Detailed Log Pages (Employee + Date = One Row)
                 for (pageIndex in 0 until logPages) {
                     globalPageIndex++
                     val pageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, globalPageIndex).create()
                     val page = pdfDoc.startPage(pageInfo)
                     val canvas: Canvas = page.canvas
 
-                    // Draw Header Brand
+                    // Header brand
                     canvas.drawText("Smart Workforce - Detailed Attendance Logs", 36f, 44f, titlePaint)
-                    canvas.drawText("Generated: $currentDate | Filter: $filterSubtitle | Total: ${records.size}", 36f, 62f, subtitlePaint)
+                    canvas.drawText("Generated: $currentDate | Filter: $filterSubtitle | Total Entries: ${dailyRows.size}", 36f, 62f, subtitlePaint)
 
-                    // Table Layout
+                    // Column X positions
+                    // SL(16)|DATE(56)|EMPLOYEE(72)|PHOTO(30)|SHIFT(52)|IN(56)|OUT(56)|DUTY HRS(46)|STATUS(52)|IN GEO(44)|OUT GEO(41)
+                    val cSl       = 36f
+                    val cDate     = 52f
+                    val cEmployee = 108f
+                    val cPhoto    = 180f
+                    val cShift    = 210f
+                    val cIn       = 262f
+                    val cOut      = 318f
+                    val cDutyHrs  = 374f
+                    val cStatus   = 420f
+                    val cInGeo    = 472f
+                    val cOutGeo   = 516f
+
                     val startX = 36f
                     val endX = (pageWidth - 36).toFloat()
-                    var currentY = 82f
+                    var currentY = 78f
                     val tableHeaderHeight = 26f
 
-                    // Header Row with DATE, EMPLOYEE, PHOTO, TYPE, TIME, DUTY HRS, STATUS, SHIFT, GEOFENCE
+                    // Header Row
                     canvas.drawRect(startX, currentY, endX, currentY + tableHeaderHeight, headerBgPaint)
-                    canvas.drawText("SL", startX + 4f, currentY + 17f, headerTextPaint)
-                    canvas.drawText("DATE", startX + 18f, currentY + 17f, headerTextPaint)
-                    canvas.drawText("EMPLOYEE", startX + 82f, currentY + 17f, headerTextPaint)
-                    canvas.drawText("PHOTO", startX + 162f, currentY + 17f, headerTextPaint)
-                    canvas.drawText("TYPE", startX + 195f, currentY + 17f, headerTextPaint)
-                    canvas.drawText("TIME", startX + 245f, currentY + 17f, headerTextPaint)
-                    canvas.drawText("DUTY HRS", startX + 300f, currentY + 17f, headerTextPaint)
-                    canvas.drawText("STATUS", startX + 360f, currentY + 17f, headerTextPaint)
-                    canvas.drawText("SHIFT", startX + 420f, currentY + 17f, headerTextPaint)
-                    canvas.drawText("GEOFENCE", startX + 478f, currentY + 17f, headerTextPaint)
+                    canvas.drawText("SL",       cSl,       currentY + 17f, headerTextPaint)
+                    canvas.drawText("DATE",     cDate,     currentY + 17f, headerTextPaint)
+                    canvas.drawText("EMPLOYEE", cEmployee, currentY + 17f, headerTextPaint)
+                    canvas.drawText("PHOTO",    cPhoto,    currentY + 17f, headerTextPaint)
+                    canvas.drawText("SHIFT",    cShift,    currentY + 17f, headerTextPaint)
+                    canvas.drawText("DUTY IN",  cIn,       currentY + 17f, headerTextPaint)
+                    canvas.drawText("DUTY OUT", cOut,      currentY + 17f, headerTextPaint)
+                    canvas.drawText("DUTY HRS", cDutyHrs,  currentY + 17f, headerTextPaint)
+                    canvas.drawText("STATUS",   cStatus,   currentY + 17f, headerTextPaint)
+                    canvas.drawText("IN GEO",   cInGeo,    currentY + 17f, headerTextPaint)
+                    canvas.drawText("OUT GEO",  cOutGeo,   currentY + 17f, headerTextPaint)
 
                     currentY += tableHeaderHeight
 
-                        val startIndex = pageIndex * recordsPerPage
-                        val endIndex = minOf(startIndex + recordsPerPage, records.size)
+                    val startIndex = pageIndex * recordsPerPage
+                    val endIndex = minOf(startIndex + recordsPerPage, dailyRows.size)
 
-                        for (i in startIndex until endIndex) {
-                            val item = records[i]
-                            val isEven = (i % 2 == 0)
-                            canvas.drawRect(startX, currentY, endX, currentY + rowHeight, if (isEven) rowBgEvenPaint else rowBgOddPaint)
-                            canvas.drawRect(startX, currentY, endX, currentY + rowHeight, borderPaint)
+                    // Missing-punch placeholder strings (must match groupToDailyRows)
+                    val MISSING_IN  = "In \u09A6\u09C7\u0993\u09AF\u09BC\u09BE \u09B9\u09AF\u09BC\u09A8\u09BF"
+                    val MISSING_OUT = "Out \u09A6\u09C7\u0993\u09AF\u09BC\u09BE \u09B9\u09AF\u09BC\u09A8\u09BF"
 
-                            val centerY = currentY + (rowHeight / 2f)
+                    for (i in startIndex until endIndex) {
+                        val row = dailyRows[i]
+                        val isEven = (i % 2 == 0)
+                        canvas.drawRect(startX, currentY, endX, currentY + rowHeight, if (isEven) rowBgEvenPaint else rowBgOddPaint)
+                        canvas.drawRect(startX, currentY, endX, currentY + rowHeight, borderPaint)
 
-                            // SL
-                            canvas.drawText("${i + 1}", startX + 4f, centerY + 3.5f, rowTextPaint)
+                        val centerY = currentY + (rowHeight / 2f)
 
-                            // Date
-                            val (dateStr, timeStr) = formatDateTime(item.timestamp)
-                            val datePaint = Paint().apply {
-                                color = Color.parseColor("#0F172A")
-                                textSize = 7.5f
-                                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-                                isAntiAlias = true
-                            }
-                            canvas.drawText(dateStr, startX + 18f, centerY + 3.5f, datePaint)
+                        // SL
+                        canvas.drawText("${row.sl}", cSl, centerY + 3.5f, rowTextPaint)
 
-                            // Name (Wrapped to 2 lines)
-                            val rawName = item.userName ?: "Officer"
-                            drawWrappedText(canvas, rawName, startX + 82f, currentY + 4f, 76f, rowTextPaint, maxLines = 2)
-
-                            // Photo Thumbnail
-                            val photoBmp = bitmapCache[item.id]
-                            val photoSize = 24f
-                            val photoX = startX + 162f
-                            val photoY = currentY + (rowHeight - photoSize) / 2f
-                            if (photoBmp != null) {
-                                val photoRect = RectF(photoX, photoY, photoX + photoSize, photoY + photoSize)
-                                canvas.drawBitmap(photoBmp, null, photoRect, null)
-                                canvas.drawRect(photoRect, borderPaint)
-                            } else {
-                                val photoRect = RectF(photoX, photoY, photoX + photoSize, photoY + photoSize)
-                                canvas.drawRoundRect(photoRect, 3f, 3f, photoPlaceholderPaint)
-                                canvas.drawText("N/A", photoX + photoSize / 2f, photoY + 15f, photoTextPaint)
-                            }
-
-                            // Type
-                            val isPunchIn = (item.type == "In")
-                            val typeText = if (isPunchIn) "Duty In" else "Duty Out"
-                            val typePaint = Paint().apply {
-                                color = if (isPunchIn) Color.parseColor("#059669") else Color.parseColor("#E11D48")
-                                textSize = 7.5f
-                                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-                                isAntiAlias = true
-                            }
-                            canvas.drawText(typeText, startX + 195f, centerY + 3.5f, typePaint)
-
-                            // Time
-                            canvas.drawText(timeStr, startX + 245f, centerY + 3.5f, rowTextPaint)
-
-                            // Duty Hours
-                            val dutyHrs = calculateDayDutyDuration(item, records)
-                            val dutyPaint = Paint().apply {
-                                color = if (dutyHrs != "-") Color.parseColor("#059669") else Color.parseColor("#94A3B8")
-                                textSize = 8f
-                                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-                                isAntiAlias = true
-                            }
-                            canvas.drawText(dutyHrs, startX + 300f, centerY + 3.5f, dutyPaint)
-
-                            // Status Badge (Wrapped to 2 lines)
-                            val statusText = formatLateStatus(item.status ?: "On Time")
-                            val statusPaint = Paint().apply {
-                                color = when {
-                                    statusText.startsWith("Late", ignoreCase = true) -> Color.parseColor("#D97706")
-                                    statusText.startsWith("Early", ignoreCase = true) -> Color.parseColor("#EA580C")
-                                    else -> Color.parseColor("#059669")
-                                }
-                                textSize = 7f
-                                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-                                isAntiAlias = true
-                            }
-                            drawWrappedText(canvas, statusText, startX + 360f, currentY + 4f, 56f, statusPaint, maxLines = 2)
-
-                            // Shift (Wrapped to 2 lines)
-                            val rawShift = item.shiftName ?: "General"
-                            drawWrappedText(canvas, rawShift, startX + 420f, currentY + 4f, 55f, rowTextPaint, maxLines = 2)
-
-                            // Geofence (Wrapped to 2 lines)
-                            val geoText = if (item.isWithinGeofence) "Within Office" else "Outside Office"
-                            val geoPaint = Paint().apply {
-                                color = if (item.isWithinGeofence) Color.parseColor("#059669") else Color.parseColor("#D97706")
-                                textSize = 7.5f
-                                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-                                isAntiAlias = true
-                            }
-                            drawWrappedText(canvas, geoText, startX + 478f, currentY + 4f, 50f, geoPaint, maxLines = 2)
-
-                            currentY += rowHeight
+                        // Date (bold)
+                        val datePaint = Paint().apply {
+                            color = Color.parseColor("#0F172A")
+                            textSize = 7.5f
+                            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                            isAntiAlias = true
                         }
+                        canvas.drawText(row.dateStr, cDate, centerY + 3.5f, datePaint)
+
+                        // Employee (2-line wrap)
+                        drawWrappedText(canvas, row.employeeName, cEmployee, currentY + 4f, 68f, rowTextPaint, maxLines = 2)
+
+                        // Photo (Duty In selfie preferred)
+                        val cacheKey = row.inRecord?.id ?: row.outRecord?.id
+                        val photoBmp = if (cacheKey != null) bitmapCache[cacheKey] else null
+                        val photoSize = 28f
+                        val photoY = currentY + (rowHeight - photoSize) / 2f
+                        if (photoBmp != null) {
+                            val photoRect = RectF(cPhoto, photoY, cPhoto + photoSize, photoY + photoSize)
+                            canvas.drawBitmap(photoBmp, null, photoRect, null)
+                            canvas.drawRect(photoRect, borderPaint)
+                        } else {
+                            val photoRect = RectF(cPhoto, photoY, cPhoto + photoSize, photoY + photoSize)
+                            canvas.drawRoundRect(photoRect, 3f, 3f, photoPlaceholderPaint)
+                            canvas.drawText("N/A", cPhoto + photoSize / 2f, photoY + 16f, photoTextPaint)
+                        }
+
+                        // Shift (2-line wrap)
+                        drawWrappedText(canvas, row.shiftName, cShift, currentY + 4f, 48f, rowTextPaint, maxLines = 2)
+
+                        // Paint objects for missing/present values
+                        val missingPaint = Paint().apply {
+                            color = Color.parseColor("#D97706")
+                            textSize = 6.5f
+                            typeface = Typeface.create(Typeface.DEFAULT, Typeface.ITALIC)
+                            isAntiAlias = true
+                        }
+                        val inTimePaint = Paint().apply {
+                            color = Color.parseColor("#059669")
+                            textSize = 7.5f
+                            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                            isAntiAlias = true
+                        }
+                        val outTimePaint = Paint().apply {
+                            color = Color.parseColor("#E11D48")
+                            textSize = 7.5f
+                            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                            isAntiAlias = true
+                        }
+
+                        // Duty In Time
+                        if (row.inTime == MISSING_IN) {
+                            drawWrappedText(canvas, row.inTime, cIn, currentY + 5f, 54f, missingPaint, maxLines = 2)
+                        } else {
+                            canvas.drawText(row.inTime, cIn, centerY + 3.5f, inTimePaint)
+                        }
+
+                        // Duty Out Time
+                        if (row.outTime == MISSING_OUT) {
+                            drawWrappedText(canvas, row.outTime, cOut, currentY + 5f, 54f, missingPaint, maxLines = 2)
+                        } else {
+                            canvas.drawText(row.outTime, cOut, centerY + 3.5f, outTimePaint)
+                        }
+
+                        // Duty Hours
+                        val dutyMissing = row.duration == MISSING_IN || row.duration == MISSING_OUT
+                        val dutyPaint = Paint().apply {
+                            color = if (!dutyMissing) Color.parseColor("#059669") else Color.parseColor("#94A3B8")
+                            textSize = if (!dutyMissing) 8f else 6.5f
+                            typeface = if (!dutyMissing) Typeface.create(Typeface.DEFAULT, Typeface.BOLD) else Typeface.DEFAULT
+                            isAntiAlias = true
+                        }
+                        if (dutyMissing) {
+                            drawWrappedText(canvas, row.duration, cDutyHrs, currentY + 5f, 44f, dutyPaint, maxLines = 2)
+                        } else {
+                            canvas.drawText(row.duration, cDutyHrs, centerY + 3.5f, dutyPaint)
+                        }
+
+                        // Status (2-line wrap, color-coded)
+                        val statusPaint = Paint().apply {
+                            color = when {
+                                row.status.startsWith("Late", ignoreCase = true)  -> Color.parseColor("#D97706")
+                                row.status.startsWith("Early", ignoreCase = true) -> Color.parseColor("#EA580C")
+                                else -> Color.parseColor("#059669")
+                            }
+                            textSize = 7f
+                            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                            isAntiAlias = true
+                        }
+                        drawWrappedText(canvas, row.status, cStatus, currentY + 4f, 50f, statusPaint, maxLines = 2)
+
+                        // In Geofence
+                        val inGeoColor = if (row.inGeofence == "Within Office") "#059669" else "#D97706"
+                        val inGeoPaint = Paint().apply {
+                            color = Color.parseColor(inGeoColor)
+                            textSize = 7f
+                            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                            isAntiAlias = true
+                        }
+                        drawWrappedText(canvas, row.inGeofence, cInGeo, currentY + 4f, 42f, inGeoPaint, maxLines = 2)
+
+                        // Out Geofence
+                        val outGeoMissing = row.outGeofence == MISSING_OUT
+                        val outGeoColor = if (!outGeoMissing && row.outGeofence == "Within Office") "#059669" else "#D97706"
+                        val outGeoPaint = Paint().apply {
+                            color = Color.parseColor(outGeoColor)
+                            textSize = 7f
+                            typeface = if (outGeoMissing) Typeface.create(Typeface.DEFAULT, Typeface.ITALIC)
+                                       else Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                            isAntiAlias = true
+                        }
+                        drawWrappedText(canvas, row.outGeofence, cOutGeo, currentY + 4f, 40f, outGeoPaint, maxLines = 2)
+
+                        currentY += rowHeight
+                    }
 
                     // Page Footer
                     val footerPaint = Paint().apply {
@@ -797,6 +855,159 @@ object ReportExporter {
                 }
             }
         }.start()
+    }
+
+    // ── Daily-Row Grouping ─────────────────────────────────────────────────────
+
+    /**
+     * Internal representation of one Employee + Date row for export.
+     * Merges raw Duty In / Duty Out [AttendanceResponse] records into a single
+     * flat structure consumed by [exportToExcel] and [exportToPdf].
+     */
+    private data class DailyAttendanceRow(
+        val sl: Int,
+        val dateStr: String,          // dd-MM-yyyy
+        val employeeName: String,
+        val shiftName: String,
+        val inTime: String,           // formatted time or MISSING_IN placeholder
+        val outTime: String,          // formatted time or MISSING_OUT placeholder
+        val duration: String,         // HH:MM or missing placeholder
+        val status: String,
+        val inGeofence: String,       // "Within Office" | "Outside Office" | "-"
+        val outGeofence: String,      // "Within Office" | "Outside Office" | MISSING_OUT
+        val inLat: String,
+        val inLng: String,
+        val outLat: String,
+        val outLng: String,
+        val selfieUrl: String?,       // Duty In selfie preferred; Out as fallback
+        val inRecord: AttendanceResponse?,
+        val outRecord: AttendanceResponse?
+    )
+
+    /**
+     * Groups a flat list of [AttendanceResponse] records (each a single Duty In
+     * or Duty Out punch) into [DailyAttendanceRow] objects keyed on
+     * **Employee (userId) + local calendar date**.
+     *
+     * Rules:
+     * - Records sorted ascending by timestamp before grouping.
+     * - Earliest `type=="In"` record → [DailyAttendanceRow.inRecord].
+     * - Latest  `type=="Out"` record → [DailyAttendanceRow.outRecord].
+     * - Missing In  → placeholder "In \u09A6\u09C7\u0993\u09AF\u09BC\u09BE \u09B9\u09AF\u09BC\u09A8\u09BF".
+     * - Missing Out → placeholder "Out \u09A6\u09C7\u0993\u09AF\u09BC\u09BE \u09B9\u09AF\u09BC\u09A8\u09BF".
+     * - Duration = outMillis − inMillis (HH:MM); falls back to appropriate placeholder.
+     * - Photo: Duty In selfie preferred; Duty Out used as fallback.
+     */
+    private fun groupToDailyRows(records: List<AttendanceResponse>): List<DailyAttendanceRow> {
+        val MISSING_IN  = "In \u09A6\u09C7\u0993\u09AF\u09BC\u09BE \u09B9\u09AF\u09BC\u09A8\u09BF"
+        val MISSING_OUT = "Out \u09A6\u09C7\u0993\u09AF\u09BC\u09BE \u09B9\u09AF\u09BC\u09A8\u09BF"
+        val GEO_WITHIN  = "Within Office"
+        val GEO_OUTSIDE = "Outside Office"
+
+        // Sort ascending so earliest In / latest Out are easy to find
+        val sorted = records.sortedBy { parseTimestampMillis(it.timestamp) }
+
+        // LinkedHashMap preserves chronological insertion order
+        val grouped = LinkedHashMap<String, MutableList<AttendanceResponse>>()
+        for (rec in sorted) {
+            val (dateStr, _) = formatDateTime(rec.timestamp)
+            grouped.getOrPut("${rec.userId}|$dateStr") { mutableListOf() }.add(rec)
+        }
+
+        val rows = mutableListOf<DailyAttendanceRow>()
+        var sl = 1
+
+        for ((_, group) in grouped) {
+            val inRecords  = group.filter { it.type == "In"  }.sortedBy { parseTimestampMillis(it.timestamp) }
+            val outRecords = group.filter { it.type == "Out" }.sortedBy { parseTimestampMillis(it.timestamp) }
+
+            val firstIn      = inRecords.firstOrNull()
+            val lastOut      = outRecords.lastOrNull()
+            val representative = firstIn ?: lastOut ?: group.first()
+
+            // Convert "dd MMM yyyy" → "dd-MM-yyyy" for display
+            val (rawDateStr, _) = formatDateTime(representative.timestamp)
+            val displayDate = try {
+                val d = SimpleDateFormat("dd MMM yyyy", Locale.US).parse(rawDateStr)
+                if (d != null) SimpleDateFormat("dd-MM-yyyy", Locale.US).format(d) else rawDateStr
+            } catch (_: Exception) { rawDateStr }
+
+            val employeeName = representative.userName ?: "Officer"
+            val shift = representative.shiftName?.takeIf { it.isNotBlank() } ?: "General Shift"
+
+            // Formatted punch times
+            val inTime  = if (firstIn != null) formatDateTime(firstIn.timestamp).second  else MISSING_IN
+            val outTime = if (lastOut != null) formatDateTime(lastOut.timestamp).second else MISSING_OUT
+
+            // Duration
+            val duration: String = when {
+                firstIn != null && lastOut != null -> {
+                    val inMs  = parseTimestampMillis(firstIn.timestamp)
+                    val outMs = parseTimestampMillis(lastOut.timestamp)
+                    if (outMs > inMs) {
+                        val diff  = outMs - inMs
+                        "%02d:%02d".format(diff / (1000 * 60 * 60), (diff / (1000 * 60)) % 60)
+                    } else MISSING_OUT
+                }
+                firstIn == null -> MISSING_IN
+                else            -> MISSING_OUT
+            }
+
+            // Status — combine In/Out statuses meaningfully
+            val status: String = when {
+                firstIn != null && lastOut != null -> {
+                    val inSt  = formatLateStatus(firstIn.status)
+                    val outSt = formatLateStatus(lastOut.status)
+                    when {
+                        inSt == outSt      -> inSt
+                        outSt == "On Time" -> inSt
+                        inSt  == "On Time" -> outSt
+                        else               -> "$inSt / $outSt"
+                    }
+                }
+                firstIn  != null -> formatLateStatus(firstIn.status)
+                lastOut  != null -> formatLateStatus(lastOut.status)
+                else             -> "On Time"
+            }
+
+            // Geofence
+            val inGeofence  = if (firstIn != null) (if (firstIn.isWithinGeofence)  GEO_WITHIN else GEO_OUTSIDE) else "-"
+            val outGeofence = if (lastOut != null) (if (lastOut.isWithinGeofence) GEO_WITHIN else GEO_OUTSIDE) else MISSING_OUT
+
+            // Location coordinates
+            val inLat  = firstIn?.latitude?.toString()  ?: "-"
+            val inLng  = firstIn?.longitude?.toString() ?: "-"
+            val outLat = lastOut?.latitude?.toString()  ?: "-"
+            val outLng = lastOut?.longitude?.toString() ?: "-"
+
+            // Photo: Duty In selfie preferred; fallback to Duty Out
+            val selfieUrl = firstIn?.selfieUrl?.takeIf { it.isNotBlank() }
+                ?: lastOut?.selfieUrl?.takeIf { it.isNotBlank() }
+
+            rows.add(
+                DailyAttendanceRow(
+                    sl           = sl++,
+                    dateStr      = displayDate,
+                    employeeName = employeeName,
+                    shiftName    = shift,
+                    inTime       = inTime,
+                    outTime      = outTime,
+                    duration     = duration,
+                    status       = status,
+                    inGeofence   = inGeofence,
+                    outGeofence  = outGeofence,
+                    inLat        = inLat,
+                    inLng        = inLng,
+                    outLat       = outLat,
+                    outLng       = outLng,
+                    selfieUrl    = selfieUrl,
+                    inRecord     = firstIn,
+                    outRecord    = lastOut
+                )
+            )
+        }
+
+        return rows
     }
 
     private fun shareFile(context: Context, file: File, mimeType: String, chooserTitle: String) {

@@ -11,6 +11,7 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import com.zynexbd.livetracking.R
 import com.zynexbd.livetracking.activities.AdminOverviewDashboardActivity
+import com.zynexbd.livetracking.activities.AdminRouteHistoryActivity
 import com.zynexbd.livetracking.activities.LoginActivity
 import com.zynexbd.livetracking.activities.UserHomeActivity
 import java.util.Collections
@@ -97,7 +98,9 @@ object NotificationHelper {
         title: String,
         message: String,
         notificationId: Int = 0,
-        uniqueDeduplicationKey: String? = null
+        uniqueDeduplicationKey: String? = null,
+        type: String? = null,
+        referenceId: String? = null
     ): Boolean {
         // Construct deterministic deduplication key
         val deduplicationKey = when {
@@ -118,7 +121,16 @@ object NotificationHelper {
         val session = SessionManager(context)
         val targetIntent = when {
             !session.isLoggedIn() -> Intent(context, LoginActivity::class.java)
-            session.isAdmin() -> Intent(context, AdminOverviewDashboardActivity::class.java)
+            session.isAdmin() -> {
+                if (type == "GpsOfflineAlert" && !referenceId.isNullOrBlank()) {
+                    val targetUserId = referenceId.toIntOrNull() ?: -1
+                    Intent(context, AdminRouteHistoryActivity::class.java).apply {
+                        putExtra("USER_ID", targetUserId)
+                    }
+                } else {
+                    Intent(context, AdminOverviewDashboardActivity::class.java)
+                }
+            }
             else -> Intent(context, UserHomeActivity::class.java)
         }.apply {
             flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP

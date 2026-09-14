@@ -155,7 +155,12 @@ class RecordVisitActivity : BaseActivity() {
                 } else {
                     binding.buttonSaveVisit.isEnabled = true
                     binding.buttonSaveVisit.text = "ভিজিট লগ সেভ করুন"
-                    val err = response.errorBody()?.string() ?: "Error Code: ${response.code()}"
+                    val raw = response.errorBody()?.string()
+                    val err = com.zynexbd.livetracking.utils.NetworkErrorHandler.parseHttpError(
+                        code = response.code(),
+                        errorBody = raw,
+                        fallbackMessage = "ভিজিট তথ্য সেভ করতে ব্যর্থ হয়েছে"
+                    )
                     Toast.makeText(this@RecordVisitActivity, "সেভ করতে ব্যর্থ: $err", Toast.LENGTH_LONG).show()
                 }
             } catch (e: Exception) {

@@ -40,15 +40,15 @@ public class AuthController : ControllerBase
             if (!_hasher.Verify(user, user.PasswordHash, request.Password))
                 return Unauthorized(new { message = "Invalid username/mobile or password." });
 
-            // Device Locking & Single-Device Enforcement for Field Users
-            if (user.Role != "Admin" && !string.IsNullOrWhiteSpace(request.DeviceId))
+            // Device Locking & Single-Device Enforcement for all users (including Admin)
+            if (!string.IsNullOrWhiteSpace(request.DeviceId))
             {
                 var reqDeviceId = request.DeviceId.Trim();
                 var reqDeviceModel = request.DeviceModel?.Trim();
 
                 if (string.IsNullOrWhiteSpace(user.BoundDeviceId))
                 {
-                    // First time login on a device -> Bind this device permanently to the user
+                    // First time login on a device -> Bind this device permanently to the user/admin
                     user.BoundDeviceId = reqDeviceId;
                     user.DeviceModel = reqDeviceModel;
                     user.UpdatedAtUtc = DateTime.UtcNow;
@@ -57,9 +57,10 @@ public class AuthController : ControllerBase
                 else if (!string.Equals(user.BoundDeviceId.Trim(), reqDeviceId, StringComparison.OrdinalIgnoreCase))
                 {
                     var boundDeviceName = !string.IsNullOrWhiteSpace(user.DeviceModel) ? user.DeviceModel : "রেজিস্টার্ড ডিভাইসে";
+                    var contactPerson = user.Role == "Admin" ? "সুপার অ্যাডমিন / টেকনিক্যাল সাপোর্টের" : "অ্যাডমিনের";
                     return StatusCode(403, new
                     {
-                        message = $"ডিভাইস অনুমোদিত নয়!\nআপনার একাউন্টটি ইতোমধ্যে '{boundDeviceName}' ডিভাইসে নিবন্ধিত আছে। একটির বেশি ডিভাইসে লগইন করা যাবে না। ডিভাইস পরিবর্তন করতে অ্যাডমিনের সাথে যোগাযোগ করুন।"
+                        message = $"ডিভাইস অনুমোদিত নয়!\nআপনার {(user.Role == "Admin" ? "অ্যাডমিন " : "")}একাউন্টটি ইতোমধ্যে '{boundDeviceName}' ডিভাইসে নিবন্ধিত আছে। একটির বেশি ডিভাইসে লগইন করা যাবে না। ডিভাইস পরিবর্তন করতে {contactPerson} সাথে যোগাযোগ করুন।"
                     });
                 }
             }
@@ -74,7 +75,8 @@ public class AuthController : ControllerBase
                 user.Username,
                 user.Role,
                 user.CompanyId,
-                user.Company?.CompanyName
+                user.Company?.CompanyName,
+                user.Company?.BrandLogo
             );
             return Ok(response);
         }

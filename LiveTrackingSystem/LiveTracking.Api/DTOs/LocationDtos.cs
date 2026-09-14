@@ -40,4 +40,5 @@ public record LocationResponse(
     double? Speed,
     double? Bearing,
     DateTime? RecordedAtUtc,
-    string? LocationAddress = null);
+    string? LocationAddress = null,
+    bool IsOnline = false);

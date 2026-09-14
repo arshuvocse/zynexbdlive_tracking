@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/bg_splash_glossy_gradient"
+    android:fitsSystemWindows="true">
+
+    <!-- Center Content: Glossy Card with Logo & Titles -->
+    <LinearLayout
+        android:id="@+id/layoutCenterBrand"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:paddingHorizontal="24dp"
+        app:layout_constraintBottom_toTopOf="@+id/layoutSplashFooter"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintVertical_bias="0.45">
+
+        <!-- Glossy Glass Logo Container -->
+        <FrameLayout
+            android:id="@+id/cardLogoContainer"
+            android:layout_width="128dp"
+            android:layout_height="128dp"
+            android:background="@drawable/bg_glass_logo_card"
+            android:elevation="12dp"
+            android:padding="14dp">
+
+            <ImageView
+                android:id="@+id/imageSplashLogo"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:adjustViewBounds="true"
+                android:contentDescription="Smart Workforce Logo"
+                android:scaleType="fitCenter"
+                android:src="@drawable/app_logo" />
+        </FrameLayout>
+
+        <!-- App Brand Title -->
+        <TextView
+            android:id="@+id/textSplashTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="22dp"
+            android:fontFamily="sans-serif-black"
+            android:gravity="center"
+            android:letterSpacing="0.04"
+            android:text="Smart Workforce"
+            android:textColor="#0F172A"
+            android:textSize="28sp"
+            android:textStyle="bold" />
+
+        <!-- App Tagline / Subtitle -->
+        <TextView
+            android:id="@+id/textSplashSubtitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:fontFamily="sans-serif-medium"
+            android:gravity="center"
+            android:letterSpacing="0.02"
+            android:text="Smart Field Operations &amp; Live Tracking"
+            android:textColor="#2563EB"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <!-- Bottom Footer with subtle loader and company branding -->
+    <LinearLayout
+        android:id="@+id/layoutSplashFooter"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="36dp"
+        android:gravity="center"
+        android:orientation="vertical"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent">
+
+        <ProgressBar
+            android:id="@+id/progressSplash"
+            style="?android:attr/progressBarStyleSmall"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_marginBottom="16dp"
+            android:indeterminate="true"
+            android:indeterminateTint="#3B82F6" />
+
+        <TextView
+            android:id="@+id/textSplashFooter"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="sans-serif-medium"
+            android:letterSpacing="0.04"
+            android:text="Powered by Zynex Soft Tech"
+            android:textColor="#64748B"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

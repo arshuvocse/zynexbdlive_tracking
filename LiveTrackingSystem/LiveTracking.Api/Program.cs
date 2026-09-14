@@ -62,6 +62,7 @@ builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IPasswordHasherService, PasswordHasherService>();
 builder.Services.AddHostedService<SubscriptionReminderHostedService>();
 builder.Services.AddHostedService<AttendanceShiftHostedService>();
+builder.Services.AddHostedService<GpsInactivityAlertHostedService>();
 
 builder.Services.AddSignalR();
 

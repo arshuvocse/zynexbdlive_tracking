@@ -119,7 +119,8 @@ public class LocationsController : ControllerBase
                 location.Speed,
                 location.Bearing,
                 location.RecordedAtUtc,
-                location.LocationAddress
+                location.LocationAddress,
+                true // Just received ping, so isOnline = true
             );
 
             if (user?.CompanyId.HasValue == true)
@@ -176,9 +177,12 @@ public class LocationsController : ControllerBase
             .Where(l => l != null)
             .ToDictionary(l => l!.UserId, l => l!);
 
+        var cutoff10m = DateTime.UtcNow.AddMinutes(-10);
+
         var results = users.Select(u =>
         {
             locationMap.TryGetValue(u.UserId, out var loc);
+            bool isOnline = loc != null && loc.RecordedAtUtc >= cutoff10m;
             return new LocationResponse(
                 u.UserId,
                 u.Username,
@@ -190,7 +194,8 @@ public class LocationsController : ControllerBase
                 loc?.Speed,
                 loc?.Bearing,
                 loc?.RecordedAtUtc,
-                loc?.LocationAddress
+                loc?.LocationAddress,
+                isOnline
             );
         }).ToList();
 
@@ -219,8 +224,10 @@ public class LocationsController : ControllerBase
             .OrderByDescending(l => l.RecordedAtUtc)
             .FirstOrDefaultAsync();
 
+        bool isOnline = latest != null && latest.RecordedAtUtc >= DateTime.UtcNow.AddMinutes(-10);
+
         return Ok(new LocationResponse(user.UserId, user.Username, user.FullName, user.IsActive,
-            latest?.Latitude, latest?.Longitude, latest?.Accuracy, latest?.Speed, latest?.Bearing, latest?.RecordedAtUtc, latest?.LocationAddress));
+            latest?.Latitude, latest?.Longitude, latest?.Accuracy, latest?.Speed, latest?.Bearing, latest?.RecordedAtUtc, latest?.LocationAddress, isOnline));
     }
 
     // Admin: full route (every GPS ping) for one driver on a given date, used by the
@@ -283,7 +290,8 @@ public class LocationsController : ControllerBase
                 l.Speed,
                 l.Bearing,
                 l.RecordedAtUtc,
-                l.LocationAddress
+                l.LocationAddress,
+                false
             ))
             .ToListAsync();
 
@@ -306,7 +314,8 @@ public class LocationsController : ControllerBase
                     l.Speed,
                     l.Bearing,
                     l.RecordedAtUtc,
-                    l.LocationAddress
+                    l.LocationAddress,
+                    false
                 ))
                 .ToListAsync();
         }
@@ -329,7 +338,8 @@ public class LocationsController : ControllerBase
                     l.Speed,
                     l.Bearing,
                     l.RecordedAtUtc,
-                    l.LocationAddress
+                    l.LocationAddress,
+                    false
                 ))
                 .ToListAsync();
         }

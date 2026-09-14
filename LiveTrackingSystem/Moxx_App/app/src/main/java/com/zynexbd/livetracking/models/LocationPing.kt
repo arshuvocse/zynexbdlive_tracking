@@ -26,6 +26,7 @@ data class LocationResponse(
     @SerializedName(value = "recordedAt", alternate = ["recordedAtUtc"]) val recordedAt: String? = null,
     val deviceBattery: Int? = null,
     val networkType: String? = null,
-    @SerializedName(value = "isOnline", alternate = ["isActive"]) val isOnline: Boolean = false,
+    val isOnline: Boolean = false,
+    val isActive: Boolean = true,
     @SerializedName(value = "locationAddress", alternate = ["address", "locationName"]) val locationAddress: String? = null
 )

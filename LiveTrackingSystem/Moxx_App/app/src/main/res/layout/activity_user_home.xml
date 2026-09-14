@@ -90,16 +90,22 @@
             android:textStyle="bold" />
     </LinearLayout>
 
-    <!-- Top Rounded Content Sheet overlaying header -->
-    <ScrollView
+    <!-- Pull to Refresh Container -->
+    <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+        android:id="@+id/swipeRefreshLayout"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:layout_below="@id/layoutHeader"
         android:layout_marginTop="-24dp"
-        android:layout_above="@id/layoutBottomNavContainer"
-        android:background="@drawable/bg_content_sheet"
-        android:clipToPadding="false"
-        android:fillViewport="true">
+        android:layout_above="@id/layoutBottomNavContainer">
+
+        <!-- Top Rounded Content Sheet overlaying header -->
+        <ScrollView
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@drawable/bg_content_sheet"
+            android:clipToPadding="false"
+            android:fillViewport="true">
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -656,7 +662,8 @@
                 android:textStyle="bold" />
 
         </LinearLayout>
-    </ScrollView>
+        </ScrollView>
+    </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
 
     <!-- Royal Blue Bottom Navigation Dock with Protruding Floating Center Home Circle -->
     <RelativeLayout

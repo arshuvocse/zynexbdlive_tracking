@@ -5,6 +5,7 @@ import com.zynexbd.livetracking.helpers.LocationOfflineQueue
 import com.zynexbd.livetracking.models.LocationPingRequest
 import com.zynexbd.livetracking.network.ApiClient
 import com.zynexbd.livetracking.utils.Constants
+import com.zynexbd.livetracking.utils.NetworkErrorHandler
 
 /**
  * Sends location pings to the API. On failure (no connectivity, 5xx, etc.)
@@ -35,7 +36,7 @@ class LocationRepository(context: Context) {
                 false
             }
         } catch (e: Exception) {
-            android.util.Log.e("LocationRepo", "Location ping network error: ${e.message}", e)
+            android.util.Log.e("LocationRepo", "Location ping network error: ${NetworkErrorHandler.friendlyMessage(e)}", e)
             false
         }
     }

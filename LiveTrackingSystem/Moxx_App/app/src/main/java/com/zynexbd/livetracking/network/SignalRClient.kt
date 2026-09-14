@@ -50,7 +50,9 @@ class SignalRClient(private val context: Context) {
                     title = notif.title,
                     message = notif.message,
                     notificationId = notif.notificationId,
-                    uniqueDeduplicationKey = if (notif.notificationId > 0) "id_${notif.notificationId}" else null
+                    uniqueDeduplicationKey = if (notif.notificationId > 0) "id_${notif.notificationId}" else null,
+                    type = notif.type,
+                    referenceId = notif.referenceId
                 )
                 onNotificationReceived?.invoke(notif)
             } catch (e: Exception) {

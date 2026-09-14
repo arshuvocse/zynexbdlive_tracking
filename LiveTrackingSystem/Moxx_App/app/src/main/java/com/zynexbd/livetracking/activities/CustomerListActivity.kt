@@ -139,7 +139,12 @@ class CustomerListActivity : BaseActivity() {
                     }
                     filterCustomers(binding.editSearch.text?.toString().orEmpty())
                 } else {
-                    val err = response.errorBody()?.string() ?: "Code: ${response.code()}"
+                    val raw = response.errorBody()?.string()
+                    val err = com.zynexbd.livetracking.utils.NetworkErrorHandler.parseHttpError(
+                        code = response.code(),
+                        errorBody = raw,
+                        fallbackMessage = "গ্রাহকের তালিকা পেতে ব্যর্থ হয়েছে"
+                    )
                     Toast.makeText(this@CustomerListActivity, "গ্রাহকের তালিকা পেতে ব্যর্থ হয়েছে: $err", Toast.LENGTH_LONG).show()
                 }
             } catch (e: Exception) {

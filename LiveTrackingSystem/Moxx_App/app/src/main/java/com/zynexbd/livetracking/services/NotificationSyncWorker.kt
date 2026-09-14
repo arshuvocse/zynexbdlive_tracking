@@ -91,7 +91,9 @@ class NotificationSyncWorker(
                         title = notif.title,
                         message = notif.message,
                         notificationId = notif.notificationId,
-                        uniqueDeduplicationKey = key
+                        uniqueDeduplicationKey = key,
+                        type = notif.type,
+                        referenceId = notif.referenceId
                     )
                     // Permanently mark as read in database
                     if (notif.notificationId > 0) {

@@ -57,7 +57,8 @@ public class CompaniesController : ControllerBase
                 c.OfficeLocations.Count(o => o.IsActive),
                 c.Users.Count(u => u.Role == "Admin" && u.IsActive),
                 c.Users.Count(u => u.Role == "User" && u.IsActive),
-                status
+                status,
+                c.BrandLogo
             );
         }).ToList();
 
@@ -95,7 +96,8 @@ public class CompaniesController : ControllerBase
             c.OfficeLocations.Count(o => o.IsActive),
             c.Users.Count(u => u.Role == "Admin" && u.IsActive),
             c.Users.Count(u => u.Role == "User" && u.IsActive),
-            status
+            status,
+            c.BrandLogo
         ));
     }
 
@@ -131,7 +133,8 @@ public class CompaniesController : ControllerBase
             c.MaxUserLimit,
             activeOfficers >= c.MaxUserLimit,
             c.PaymentDueDate?.ToString("o"),
-            status
+            status,
+            c.BrandLogo
         ));
     }
 
@@ -164,6 +167,7 @@ public class CompaniesController : ControllerBase
             ContactEmail = request.ContactEmail?.Trim(),
             MaxUserLimit = request.MaxUserLimit is > 0 ? request.MaxUserLimit.Value : 10,
             PaymentDueDate = dueDate,
+            BrandLogo = request.BrandLogo?.Trim(),
             IsActive = true,
             CreatedAtUtc = DateTime.UtcNow
         };
@@ -182,7 +186,8 @@ public class CompaniesController : ControllerBase
             company.PaymentDueDate?.ToString("o"),
             company.IsActive,
             0, 0, 0,
-            "Active"
+            "Active",
+            company.BrandLogo
         ));
     }
 
@@ -218,6 +223,9 @@ public class CompaniesController : ControllerBase
         if (request.IsActive.HasValue)
             company.IsActive = request.IsActive.Value;
 
+        if (request.BrandLogo != null)
+            company.BrandLogo = string.IsNullOrWhiteSpace(request.BrandLogo) ? null : request.BrandLogo.Trim();
+
         company.UpdatedAtUtc = DateTime.UtcNow;
         await _db.SaveChangesAsync();
 
@@ -241,7 +249,8 @@ public class CompaniesController : ControllerBase
             company.OfficeLocations.Count(o => o.IsActive),
             company.Users.Count(u => u.Role == "Admin" && u.IsActive),
             company.Users.Count(u => u.Role == "User" && u.IsActive),
-            status
+            status,
+            company.BrandLogo
         ));
     }
 }

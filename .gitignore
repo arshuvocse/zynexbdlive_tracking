@@ -34,3 +34,8 @@ src/LiveTracking.API/appsettings.json
 **/wwwroot/uploads/
 test_selfie_valid.jpg
 
+# Python
+__pycache__/
+*.pyc
+
+
